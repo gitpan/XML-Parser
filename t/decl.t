@@ -133,8 +133,9 @@ sub att {
 		     and $default eq "'green'");
     $tests[27]++ if ($elname eq 'bar' and $attname eq 'big' and $default eq
 		     "'$bigval'");
-    $tests[28]++ if ($elname eq 'junk' and $attname eq 'foo' and $default eq
-		     '#IMPLIED');
+    $tests[28]++ if ($elname eq 'junk' and $attname eq 'foo'
+                     and $type eq 'NOTATION(x|y|z)' and $default eq '#IMPLIED');
+
 }
     
 sub xd {

@@ -2,29 +2,8 @@ Changes				Change log
 Expat/Expat.pm			XML::Parser::Expat module
 Expat/Expat.xs			Extension library
 Expat/Makefile.PL		perl MakeMaker script for XML::Parser::Expat
-Expat/README			comments about expat library
 Expat/encoding.h		Header file; describes *.enc structure
 Expat/typemap			XS typemap
-Expat/expat.patches		expat patches (may be empty)
-Expat/expat/expat.html
-Expat/expat/xmlparse/hashtable.c
-Expat/expat/xmlparse/hashtable.h
-Expat/expat/xmlparse/xmlparse.c
-Expat/expat/xmlparse/xmlparse.h
-Expat/expat/xmltok/ascii.h
-Expat/expat/xmltok/asciitab.h
-Expat/expat/xmltok/iasciitab.h
-Expat/expat/xmltok/latin1tab.h
-Expat/expat/xmltok/nametab.h
-Expat/expat/xmltok/utf8tab.h
-Expat/expat/xmltok/xmldef.h
-Expat/expat/xmltok/xmlrole.c
-Expat/expat/xmltok/xmlrole.h
-Expat/expat/xmltok/xmltok.c
-Expat/expat/xmltok/xmltok.h
-Expat/expat/xmltok/xmltok_impl.c
-Expat/expat/xmltok/xmltok_impl.h
-Expat/expat/xmltok/xmltok_ns.c
 MANIFEST			This file
 Makefile.PL			perl MakeMaker script for XML::Parser
 Parser.pm			XML::Parser module

@@ -9,12 +9,17 @@
 **
 */
 
+#include <expat.h>
+
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
+
+#undef convert
+
 #include "patchlevel.h"
-#include "xmlparse.h"
 #include "encoding.h"
+
 
 /* Version 5.005_5x (Development version for 5.006) doesn't like sv_...
    anymore, but 5.004 doesn't know about PL_sv..
@@ -102,7 +107,8 @@ typedef struct {
 
 
 static HV* EncodingTable = NULL;
-static HV* ContentStash = NULL;
+
+static XML_Char nsdelim[] = {NSDELIM, '\0'};
 
 static char *QuantChar[] = {"", "?", "*", "+"};
 
@@ -162,6 +168,31 @@ newUTF8SVpvn(char *s, STRLEN len) {
 
 #endif
 
+static void*
+mymalloc(size_t size) {
+#ifndef LEAKTEST
+  return safemalloc(size);
+#else
+  return safexmalloc(328,size);
+#endif
+}
+
+static void*
+myrealloc(void *p, size_t s) {
+#ifndef LEAKTEST
+  return saferealloc(p, s);
+#else
+  return safexrealloc(p, s);
+#endif
+}
+
+static void
+myfree(void *p) {
+  Safefree(p);
+}
+
+static XML_Memory_Handling_Suite ms = {mymalloc, myrealloc, myfree};
+
 static void
 append_error(XML_Parser parser, char * err)
 {
@@ -219,11 +250,7 @@ generate_model(XML_Content *model) {
   HV * hash = newHV();
   SV * obj = newRV_noinc((SV *) hash);
 
-  if (! ContentStash) {
-    ContentStash = gv_stashpv("XML::Parser::ContentModel", 1);
-  }
-
-  sv_bless(obj, ContentStash);
+  sv_bless(obj, gv_stashpv("XML::Parser::ContentModel", 1));
 
   hv_store(hash, "Type", 4, newSViv(model->type), 0);
   if (model->quant != XML_CQUANT_NONE) {
@@ -710,6 +737,7 @@ elementDecl(void *data,
 
   cmod = generate_model(model);
 
+  Safefree(model);
   PUSHMARK(sp);
   EXTEND(sp, 3);
   PUSHs(cbv->self_sv);
@@ -719,6 +747,7 @@ elementDecl(void *data,
   perl_call_sv(cbv->eledcl_sv, G_DISCARD);
   FREETMPS;
   LEAVE;
+
 }  /* End elementDecl */
 
 static void
@@ -935,6 +964,9 @@ externalEntityRef(XML_Parser parser,
 		  const char* pubid)
 {
   dSP;
+#if defined(USE_THREADS) && PATCHLEVEL==6
+  dTHX;
+#endif
 
   int count;
   int ret = 0;
@@ -985,7 +1017,8 @@ externalEntityRef(XML_Parser parser,
 	PUSHs(*pval);
 	PUSHs(result);
 	PUTBACK;
-	count = perl_call_pv("Do_External_Parse", G_SCALAR | G_EVAL);
+	count = perl_call_pv("XML::Parser::Expat::Do_External_Parse",
+			     G_SCALAR | G_EVAL);
 	SPAGAIN;
 
 	if (SvTRUE(ERRSV)) {
@@ -1233,6 +1266,7 @@ resume_callbacks(CallbackVector *cbv) {
 
 }  /* End resume_callbacks */
 
+
 MODULE = XML::Parser::Expat PACKAGE = XML::Parser::Expat	PREFIX = XML_
 
 XML_Parser
@@ -1283,12 +1317,12 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 
 	      cbv->nslst = (AV *) SvRV(*spp);
 
-	      RETVAL = XML_ParserCreateNS(enc, NSDELIM);
+	      RETVAL = XML_ParserCreate_MM(enc, &ms, nsdelim);
 	      XML_SetNamespaceDeclHandler(RETVAL,nsStart, nsEnd);
 	    }
 	    else
 	    {
-	      RETVAL = XML_ParserCreate(enc);
+	      RETVAL = XML_ParserCreate_MM(enc, &ms, NULL);
 	    }
 	    
 	  cbv->p = RETVAL;

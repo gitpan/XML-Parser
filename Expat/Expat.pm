@@ -12,7 +12,7 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.29" ;
+$VERSION = "2.30" ;
 
 $have_File_Spec = $INC{'File/Spec.pm'} || do 'File/Spec.pm';
 
@@ -444,9 +444,14 @@ sub parse {
   my $result = 0;
   
   if (defined $arg) {
-    if (ref($arg) and UNIVERSAL::isa($arg, 'IO::Handler')) {
+    if (ref($arg) and UNIVERSAL::isa($arg, 'IO::Handle')) {
       $ioref = $arg;
-    } else {
+    } elsif (tied($arg)) {
+      my $class = ref($arg);
+      no strict 'refs';
+      $ioref = $arg if defined &{"${class}::TIEHANDLE"};
+    }
+    else {
       eval {
 	$ioref = *{$arg}{IO};
       };

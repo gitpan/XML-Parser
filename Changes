@@ -1,5 +1,22 @@
 Revision history for Perl extension XML::Parser.
 
+2.30 Thu Oct  5 12:47:36 EDT 2000
+	- Get rid of ContentStash global. Not that big a deal looking it up
+	  everytime and gets rid of a potential threading problem.
+	- Switch to shareable library version of expat from sourceforge
+	  (i.e. no longer include expat source and require that libexpat
+	   be installed)
+	- Bob Tribit <btribit@traffic.com> demonstrated a fix for problems
+	  in compiling under perl 5.6.0 with 5.005 threading.
+	- Matt Sergeant <matt@sergeant.org> discovered a typo ('IO::Handler'
+	  instead of 'IO::Handle') in Expat.pm that caused IO::Handle objects
+	  to be treated as strings instead of handles.
+	- Matt Sergeant also provided a patch to allow tied handles to work
+	  properly in calls to parse.
+	- Eric Bohlman <ebohlman@netcom.com> reported a failure when
+	  incremental parsing and external parsing were used together.
+	  Need to give explicit package when calling Do_External_Parse
+	  from externalEntityRef  otherwise fails when called through ExpatNB.
 2.29 Sun May 21 21:19:45 EDT 2000
 	- In expat, notation declaration handler registration wasn't
 	  surviving through external entity references.

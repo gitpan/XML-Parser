@@ -2,33 +2,15 @@ use ExtUtils::MakeMaker;
 use Config;
 use English;
 
-sub MY::postamble {
-  my $self = shift;
-  my $ret = '';
-
-  unless ($Config{d_memmove}) {
-    $ret = "expat/xmlparse/xmlparse.o:\n\t";
-    $ret .= '$(CCCMD) $(CCCDLFLAGS) -I$(PERL_INC) ';
-    $ret .= '-D"memmove(d,s,l)=bcopy(s,d,l)" $(DEFINE) ';
-    $ret .= 'expat/xmlparse/xmlparse.c';
-  }
-
-  $ret;
-}
-
-$define = '-DXML_NS -DXML_DTD -DXML_CONTEXT_BYTES=512 ';
-
-$order = ($Config{byteorder} =~ /^12/) ? '12' : '21';
-
-$define .= "-DXML_BYTE_ORDER=$order ";
-
-$define .= ($Config{cc} =~ /cl(\.exe)?$/i) ? '/Fo$@' : '-o $@';
-
-@expat_files = qw(expat/xmltok/xmltok.c expat/xmltok/xmlrole.c
-                  expat/xmlparse/xmlparse.c expat/xmlparse/hashtable.c);
-
+my $libs = "-lexpat";
 @extras = ();
 
+push(@extras, INC => "-I$expat_incpath")
+  if $expat_incpath;
+
+$libs = "-L$expat_libpath $libs"
+  if $expat_libpath;
+     
 push(@extras,
      CAPI => 'TRUE')
     if ($PERL_VERSION >= 5.005 and $OSNAME eq 'MSWin32'
@@ -41,11 +23,8 @@ push(@extras,
      
 WriteMakefile(
               NAME	=> 'XML::Parser::Expat',
-	      C       => ['Expat.c', @expat_files],
-              OBJECT    => '$(O_FILES)',
-              DEFINE    => $define,
-	      clean     => {FILES => 'expat/xml*/*.o'},
-              INC       => "-Iexpat/xmltok -Iexpat/xmlparse",
+	      C         => ['Expat.c'],
+	      LIBS	=> $libs,
               XSPROTOARG => '-noprototypes',
               VERSION_FROM => 'Expat.pm',
 	      @extras
