@@ -10,7 +10,7 @@ use Carp;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.32" ;
+$VERSION = "2.33" ;
 
 $have_File_Spec = $INC{'File/Spec.pm'} || do 'File/Spec.pm';
 
@@ -568,7 +568,7 @@ sub asString {
   }
   else {
     my $sep = $self->{Type} == CHOICE ? '|' : ',';
-    $ret = '(' . join($sep, @{$self->{Children}}) . ')';
+    $ret = '(' . join($sep, map { $_->asString } @{$self->{Children}}) . ')';
   }
 
   $ret .= $self->{Quant} if $self->{Quant};
