@@ -10,7 +10,7 @@ my $p = new XML::Parser(Handlers => {Comment => sub {$cnt++;}});
 
 my $xpnb = $p->parse_start;
 
-open(REC, ':samples:REC-xml-19980210.xml');
+open(REC, 'samples/REC-xml-19980210.xml');
 
 while (<REC>) {
   $xpnb->parse_more($_);

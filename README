@@ -1,47 +1,4 @@
-Tuesday, April 27, 1999
-
-This is the XML::Parser module with shared libraries compiled for 
-MacPerl.  Shared libraries run only on PPC and CFM68K versions, not 
-non-CFM 68K versions.
-
-Installation.  It's best to install the files in ':blib:lib' into your 
-'site_perl' folder; that, after all, is what it is meant for -
-
-    {MACPERL}site_perl:XML:Parser.pm
-    {MACPERL}site_perl:XML:Parser:Expat.pm
-    {MACPERL}site_perl:XML:Parser:Encodings:*.enc
-    {MACPERL}site_perl:MacCFM68K:auto:XML:Parser:Expat:Expat
-    {MACPERL}site_perl:MacPPC:auto:XML:Parser:Expat:Expat
-
-Also read the original README file for this distribution, included below.
-
-For technical notes, please see 'README.Mac'.  Files which are referenced 
-in that document as having been affected by this port are in folder 
-'Original_t'.  This includes _original_ 't' test files.  These files are 
-only for reference.
-
-Testing.  The 't' files have been tested using both the MacPerl application 
-and the MPW perl tool.  When testing before installation, use the -I switch 
-(perl tool in MPW) or Edit>Preferences (MacPerl app) to add ':blib:lib' to 
-your path, and make sure it precedes all others.
-
-Examples.  Bear in mind that returned XML, by specification, is studded 
-with linefeeds (character \012 octal or \xA hex).  For this reason, of the 
-three example scripts in folder 'samples', I recommend using 'xmlcomments' 
-with a grain of salt, and 'xmlfilter' maybe not at all.  :-) 'xmlstats' 
-works just fine.
-
-Here's an MPW command line to test 'xmlstats' before installing the files:
-
-perl -I ':blib:lib' :samples:xmlstats :samples:REC-xml-19980210.xml
-
-*****
-
-Arved Sandstrom          mailto:Arved_37@chebucto.ns.ca
-
-*****
-
-			XML::Parser Version 2.23
+			XML::Parser Version 2.24
 
 Copyright (c) 1998 Larry Wall and Clark Cooper.
 All rights reserved.
@@ -51,15 +8,11 @@ under the same terms as Perl itself.
 This is a Perl extension interface to James Clark's XML parser, expat.
 It requires at least version 5.004 of perl. The documentation for this
 extension can be found in pod format at the end of the files Parser.pm
-and Expat/Expat.pm. The expat distribution is included in full in
-this distribution in the directory Expat/expat.
+and Expat/Expat.pm. The perldoc program, provided with the perl distribution,
+can be used to view this documentation. The expat distribution is included in
+full in this distribution in the directory Expat/expat.
 
 This was modified from the original XML::Parser created by Larry Wall.
-
-This is a beta version and there's resistance to making radical API
-changes at this time, but minor, evolutionary changes may occur as I get
-feedback from the people on the perl-xml mailing list. [You can subscribe to
-this list by sending a message to subscribe-perl-xml@lyris.activestate.com.]
 
 To configure this module, cd to the directory that contains this README file
 and type the following:
@@ -94,6 +47,25 @@ If you have write access to the installation directories, you may then
 install by typing:
 
 	make install
+
+Differences from Version 2.23
+=============================
+
+The major change is reading of the external subset and expansion of parameter
+entities when the ParseParamEnt option is set to a true value. This is
+possible due to a new version of expat (Version 19990626 with local patches)
+provided by James Clark. The way is now clear for the addition of a validating
+mode, which I hope to add in the near future.
+
+The setHandler methods now return lists that consist of type, handler pairs
+that correspond to their input, but the handlers returned are the ones that
+were in effect prior to the call. This allows stacked handler managment.
+This was requested by Ben Holzman <bholzman@earthlink.net>.
+
+A EUC-KR encoding map provided by KangChan Lee <dolphin@comeng.chungnam.ac.kr>
+is now included in the distribution.
+
+A few bugs were also fixed.
 
 Clark Cooper
   coopercc@netheaven.com

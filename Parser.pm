@@ -14,7 +14,7 @@ use Carp;
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.23';
+  $VERSION = '2.24';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
 }
@@ -91,6 +91,7 @@ sub setHandlers {
   croak("Uneven number of arguments to setHandlers method")
     if (int(@handler_pairs) & 1);
   
+  my @ret;
   while (@handler_pairs) {
     my $type = shift @handler_pairs;
     my $handler = shift @handler_pairs;
@@ -99,8 +100,11 @@ sub setHandlers {
       
       croak("Unknown Parser handler type: $type\n Valid types: @types");
     }
+    push(@ret, $type, $self->{Handlers}->{$type});
     $self->{Handlers}->{$type} = $handler;
   }
+
+  return @ret;
 }				# End of setHandlers
 
 sub parse_start {
@@ -243,11 +247,6 @@ sub default_ext_ent_handler {
 
     unless (defined($status)) {
       warn "Error reading $name: $!";
-      return undef;
-    }
-
-    unless ($status) {
-      warn "$name is empty";
       return undef;
     }
 
@@ -638,6 +637,12 @@ alone on a line while parsing from a stream, then the parse is ended as if it
 saw an end of file. The intended use is with a stream of xml documents in a
 MIME multipart format. The string should not contain a trailing newline.
 
+=item * ParseParamEnt
+
+This is an Expat option. Unless standalone is set to "yes" in the XML
+declaration, setting this to a true value allows the external DTD to be read,
+and parameter entities to be parsed and expanded.
+
 =item * Non-Expat-Options
 
 If provided, this should be an anonymous hash whose keys are options that
@@ -651,8 +656,13 @@ subclassing XML::Parser.
 This method registers handlers for various parser events. It overrides any
 previous handlers registered through the Style or Handler options or through
 earlier calls to setHandlers. By providing a false or undefined value as
-the handler, the existing handler can be unset. See a description of the
-handler types in L<"HANDLERS">.
+the handler, the existing handler can be unset.
+
+This method returns a list of type, handler pairs corresponding to the
+input. The handlers returned are the ones that were in effect prior to
+the call.
+
+See a description of the handler types in L<"HANDLERS">.
 
 =item parse(SOURCE [, OPT => OPT_VALUE [...]])
 

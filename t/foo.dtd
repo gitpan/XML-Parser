@@ -1,0 +1,10 @@
+<?xml encoding="x-sjis-unicode"?>
+<!ENTITY joy "™D">
+
+<![%bar;[
+<!ATTLIST bar xyz (a|b|c) 'b'>
+]]>
+
+<![%foo;[
+<!ATTLIST foo top CDATA "hello">
+]]>

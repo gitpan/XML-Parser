@@ -6,7 +6,7 @@
 # Change 1..1 below to 1..last_test_to_print .
 # (It may become useful if the test is moved to ./t subdirectory.)
 
-BEGIN {print "1..23\n";}
+BEGIN {print "1..24\n";}
 END {print "not ok 1\n" unless $loaded;}
 use XML::Parser;
 $loaded = 1;
@@ -98,9 +98,10 @@ sub eh
     if ($el eq 'zap')
     {
 	$tests[8]++;
-	$p->setHandlers('Char', \&newch);
+	my @old = $p->setHandlers('Char', \&newch);
 	$tests[19]++ if $p->current_line == 17;
 	$tests[20]++ if $p->current_column == 20;
+	$tests[23]++ if ($old[0] eq 'Char' and $old[1] == \&ch);
     }
     if ($el eq 'boom')
     {
@@ -201,7 +202,7 @@ else
 
 unlink('zoe.ent') if (-f 'zoe.ent');
 
-for (4 .. 22)
+for (4 .. 23)
 {
     print "not " unless $tests[$_];
     print "ok $_\n";
@@ -218,4 +219,4 @@ if ($cmpstr ne $pos)
 {
     print "not ";
 }
-print "ok 23\n";
+print "ok 24\n";

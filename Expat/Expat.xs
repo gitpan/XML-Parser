@@ -35,11 +35,12 @@
 
 #define XMLP_UPD(fld) \
   if (cbv->fld) {\
+    RETVAL = newSVsv(cbv->fld);\
     if (cbv->fld != fld)\
       Perl_sv_setsv(cbv->fld, fld);\
   }\
   else\
-    cbv->fld=newSVsv(fld)
+    ((RETVAL = &PL_sv_undef), cbv->fld = newSVsv(fld))
 
 /* These are flags set in the dflags field. They indicate whether the
    corresponding handler is set. All these handlers actually use expat's
@@ -62,7 +63,8 @@ typedef enum {
   PS_Internaldecl, PS_Checkinternal, PS_Doctypend, PS_Entityname,
   PS_Elementname, PS_Attelname, PS_Entityval, PS_Entsysid, PS_Entpubid,
   PS_Declend, PS_Entndata, PS_Entnotation, PS_Elcontent, PS_Attdef,
-  PS_Atttype, PS_Attmoretype, PS_Attval
+  PS_Atttype, PS_Attmoretype, PS_Attval,
+  PS_Externaldecl, PS_Conditional, PS_Condopen, PS_Ignore
 } ParseState;
 
 /* Values for which_decl */
@@ -101,16 +103,21 @@ typedef struct {
   unsigned start_seen:1;
   unsigned attfixed:1;
   unsigned isparam:1;
+  unsigned parseparam:1;
+  unsigned ignoresect:1;
+  unsigned externalsubset:1;
   unsigned dflags:6;
   unsigned which_decl:3;
 
-  ParseState local_parse_state;
+  ParseState dtdparse_state;
   char * doctype_buffer;
   STRLEN dtb_offset;
   STRLEN dtb_len;
   STRLEN dtb_limit;
 
-  /* Used by parse_local */
+  /* Used by parse_decl */
+
+  unsigned int includesect;
 
   int docname_offset;
   int docname_len;
@@ -421,7 +428,7 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
     PUSHMARK(SP);
     XPUSHs(ioref);
     PUTBACK ;
-    perl_call_method("close", G_VOID);
+    perl_call_method("close", G_DISCARD);
   }
 
   if (! cbv->delim) {
@@ -486,8 +493,31 @@ allwhite(const char *str, int len)
   return 1;
 }  /* End allwhite */
 
+static char *
+eq_skip(const char *p) {
+  char c;
+  while ((c = *p) == ' '
+	 || c == '\t'
+	 || c == '\r'
+	 || c == '\n')
+    p++;
+
+  if (c != '=')
+    return NULL;
+
+  p++;
+
+  while ((c = *p) == ' '
+	 || c == '\t'
+	 || c == '\r'
+	 || c == '\n')
+    p++;
+
+  return (char *) p;
+}  /* End eq_skip */
+
 static int
-parse_local(CallbackVector *cbv, const char *str, int len)
+parse_decl(CallbackVector *cbv, const char *str, int len)
 {
   unsigned int dflags;
   int   called_handler;
@@ -516,11 +546,11 @@ parse_local(CallbackVector *cbv, const char *str, int len)
 
   dflags = cbv->dflags;
 
-  switch (cbv->local_parse_state) {
+  switch (cbv->dtdparse_state) {
   case PS_Initial:
     if (brkstrt) {
       if ((dflags & INST_INDT) && len == 9 && strnEQ(str, "<!DOCTYPE", len)) {
-	cbv->local_parse_state = PS_Docname;
+	cbv->dtdparse_state = PS_Docname;
 	cbv->dtb_limit = DTB_GROW;
 	New(319, cbv->doctype_buffer, cbv->dtb_limit, char);
 	cbv->dtb_len = len;
@@ -540,29 +570,29 @@ parse_local(CallbackVector *cbv, const char *str, int len)
 	STRLEN st_len;
 	char *match, *mtchend;
 
-	match = "version=";
+	match = "version";
 	vno_len = strlen(match);
 	mtchend = match + vno_len;
 	vno = ninstr((char *) str, (char *) (str + len), match, mtchend);
-	vno += vno_len;
-	qc = *vno++;
-	vno_len = 0;
-	while (vno[vno_len] != qc)
-	  vno_len++;
+	if (vno && (vno = eq_skip(vno + vno_len))) {
+	  qc = *vno++;
+	  vno_len = 0;
+	  while (vno[vno_len] != qc)
+	    vno_len++;
+	}
 
-	match = "encoding=";
+	match = "encoding";
 	enc_len = strlen(match);
 	mtchend = match + enc_len;
 	enc = ninstr(vno + vno_len, (char *) (str + len), match, mtchend);
-	if (enc) {
-	  enc += enc_len;
+	if (enc && (enc = eq_skip(enc + enc_len))) {
 	  qc = *enc++;
 	  enc_len = 0;
 	  while (enc[enc_len] != qc)
 	    enc_len++;
 	}
 
-	match = "standalone=";
+	match = "standalone";
 	st_len = strlen(match);
 	mtchend = match + st_len;
 	if (enc) {
@@ -571,9 +601,9 @@ parse_local(CallbackVector *cbv, const char *str, int len)
 	else {
 	  stand = ninstr(vno + vno_len, (char *) (str + len), match, mtchend);
 	}
-	if (stand) {
-	  stand += st_len;
+	if (stand && (stand = eq_skip(stand + st_len))) {
 	  qc = *stand++;
+	  st_len = 0;
 	  while (stand[st_len] != qc)
 	    st_len++;
 	}
@@ -584,7 +614,9 @@ parse_local(CallbackVector *cbv, const char *str, int len)
 
 	PUSHMARK(SP);
 	XPUSHs(cbv->self_sv);
-	XPUSHs(sv_2mortal(mynewSVpv(vno, vno_len)));
+	XPUSHs(vno
+	       ? sv_2mortal(mynewSVpv(vno, vno_len))
+	       : &PL_sv_undef);
 	if (enc || stand)
 	  XPUSHs(enc
 		 ? sv_2mortal(mynewSVpv(enc, enc_len))
@@ -593,7 +625,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
 	  XPUSHs((strnEQ(stand, "no", 2)) ? &PL_sv_no : &PL_sv_yes);
 
 	PUTBACK;
-	perl_call_sv(cbv->xmldec_sv, G_VOID);
+	perl_call_sv(cbv->xmldec_sv, G_DISCARD);
 
 	cbv->in_local_hndlr = 0;
 	cbv->doctype_buffer = 0;
@@ -605,7 +637,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
     return 0;
 
   case PS_Docname:
-    cbv->local_parse_state = PS_Docextern;
+    cbv->dtdparse_state = PS_Docextern;
     if (dflags & INST_DOC) {
       cbv->docname_offset = cbv->dtb_len - len;
       cbv->docname_len = len;
@@ -616,13 +648,13 @@ parse_local(CallbackVector *cbv, const char *str, int len)
 
   case PS_Docextern:
     if (strnEQ(str, "SYSTEM", len)) {
-      cbv->local_parse_state = PS_Docsysid;
+      cbv->dtdparse_state = PS_Docsysid;
     }
     else if (strnEQ(str, "PUBLIC", len)) {
-      cbv->local_parse_state = PS_Docpubid;
+      cbv->dtdparse_state = PS_Docpubid;
     }
     else if (len == 1 && *str == '[') {
-      cbv->local_parse_state = PS_Internaldecl;
+      cbv->dtdparse_state = PS_Internaldecl;
       if (dflags & INST_DOC) {
 	cbv->intsub_offset = cbv->dtb_len - len;
       }
@@ -635,7 +667,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
     break;
 
   case PS_Docsysid:
-    cbv->local_parse_state = PS_Checkinternal;
+    cbv->dtdparse_state = PS_Checkinternal;
     if (dflags & INST_DOC) {
       cbv->docsys_offset = cbv->dtb_len - len;
       cbv->docsys_len = len;
@@ -645,7 +677,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
     break;
 
   case PS_Docpubid:
-    cbv->local_parse_state = PS_Docsysid;
+    cbv->dtdparse_state = PS_Docsysid;
     if (dflags & INST_DOC) {
       cbv->docpub_offset = cbv->dtb_len - len;
       cbv->docpub_len    = len;
@@ -657,7 +689,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
   case PS_Checkinternal:
     if (len == 1) {
       if (*str == '[') {
-	cbv->local_parse_state = PS_Internaldecl;
+	cbv->dtdparse_state = PS_Internaldecl;
 	if (dflags & INST_DOC) {
 	  cbv->intsub_offset = cbv->dtb_len - len;
 	}
@@ -677,22 +709,75 @@ parse_local(CallbackVector *cbv, const char *str, int len)
       cbv->dtb_offset = cbv->dtb_len - len;
 
       if (strnEQ(str, "<!ENTITY", len)) {
-	cbv->local_parse_state = PS_Entityname;
+	cbv->dtdparse_state = PS_Entityname;
 	cbv->isparam = 0;
       }
       else if (strnEQ(str, "<!ELEMENT", len)) {
-	cbv->local_parse_state = PS_Elementname;
+	cbv->dtdparse_state = PS_Elementname;
       }
       else if (strnEQ(str, "<!ATTLIST", len)) {
-	cbv->local_parse_state = PS_Attelname;
+	cbv->dtdparse_state = PS_Attelname;
       }
     }
     else if (len == 1 && *str == ']') {
-      cbv->local_parse_state = PS_Doctypend;
+      cbv->dtdparse_state = (cbv->parseparam
+				? PS_Externaldecl
+				: PS_Doctypend);
+      cbv->externalsubset = cbv->parseparam;
       if (dflags & INST_DOC) {
 	cbv->intsub_len = cbv->dtb_len - cbv->intsub_offset;
       }
     }
+    break;
+
+  case PS_Externaldecl:
+    if (brkstrt) {
+      if (len > 1 && strnEQ(str, "<?", 2))
+	return 0;
+
+      cbv->dtb_offset = cbv->dtb_len - len;
+
+      if (strnEQ(str, "<!ENTITY", len)) {
+	cbv->dtdparse_state = PS_Entityname;
+	cbv->isparam = 0;
+      }
+      else if (strnEQ(str, "<!ELEMENT", len)) {
+	cbv->dtdparse_state = PS_Elementname;
+      }
+      else if (strnEQ(str, "<!ATTLIST", len)) {
+	cbv->dtdparse_state = PS_Attelname;
+      }
+      else if (strnEQ(str, "<![", len)) {
+	cbv->dtdparse_state = PS_Conditional;
+      }
+    }
+    else if (cbv->includesect && strnEQ(str, "]]>", len)) {
+      cbv->includesect--;
+    }
+    break;
+    
+  case PS_Conditional:
+    if (strnEQ(str, "INCLUDE", len)) {
+      cbv->dtdparse_state = PS_Condopen;
+      cbv->includesect++;
+    }
+    else if (strnEQ(str, "IGNORE", len)) {
+      cbv->dtdparse_state = PS_Condopen;
+      cbv->ignoresect = 1;
+    }
+    break;
+
+  case PS_Condopen:
+    if (len == 1 && *str == '[') {
+      cbv->dtdparse_state = (cbv->ignoresect
+			     ? PS_Ignore
+			     :PS_Externaldecl);
+    }
+    break;
+
+  case PS_Ignore:
+    cbv->dtdparse_state = PS_Externaldecl;
+    cbv->ignoresect = 0;
     break;
 
   case PS_Doctypend:
@@ -703,7 +788,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
       cbv->isparam = 1;
     }
     else {
-      cbv->local_parse_state = PS_Entityval;
+      cbv->dtdparse_state = PS_Entityval;
       if (dflags & INST_ENT) {
 	cbv->entnam_offset = cbv->dtb_len - len;
 	cbv->entnam_len = len;
@@ -713,20 +798,20 @@ parse_local(CallbackVector *cbv, const char *str, int len)
 
   case PS_Entityval:
     if (strnEQ(str, "SYSTEM", len)) {
-      cbv->local_parse_state = PS_Entsysid;
+      cbv->dtdparse_state = PS_Entsysid;
       if (dflags & INST_ENT) {
 	cbv->which_decl = DECL_EXTENT;
 	cbv->entpub_len = 0;
       }
     }
     else if (strnEQ(str, "PUBLIC", len)) {
-      cbv->local_parse_state = PS_Entpubid;
+      cbv->dtdparse_state = PS_Entpubid;
       if (dflags & INST_ENT) {
 	cbv->which_decl = DECL_EXTENT;
       }
     }
     else if (len >= 2 ) {
-      cbv->local_parse_state = PS_Declend;
+      cbv->dtdparse_state = PS_Declend;
       if (dflags & INST_ENT) {
 	cbv->entval_offset = cbv->dtb_len - len + 1;	/* Account for '' */
 	cbv->entval_len = len - 2;			/* Account for '' */
@@ -736,7 +821,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
     break;
 
   case PS_Entsysid:
-    cbv->local_parse_state = PS_Entndata;
+    cbv->dtdparse_state = PS_Entndata;
     if (dflags & INST_ENT) {
       cbv->entsys_offset = cbv->dtb_len - len;
       cbv->entsys_len = len;
@@ -744,7 +829,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
     break;
 
   case PS_Entpubid:
-    cbv->local_parse_state = PS_Entsysid;
+    cbv->dtdparse_state = PS_Entsysid;
     if (dflags & INST_ENT) {
       cbv->entpub_offset = cbv->dtb_len - len;
       cbv->entpub_len = len;
@@ -757,12 +842,12 @@ parse_local(CallbackVector *cbv, const char *str, int len)
       goto declaration_end;
     }
     else if (strnEQ(str, "NDATA", len)) {
-      cbv->local_parse_state = PS_Entnotation;
+      cbv->dtdparse_state = PS_Entnotation;
     }
     break;
 
   case PS_Entnotation:
-    cbv->local_parse_state = PS_Declend;
+    cbv->dtdparse_state = PS_Declend;
     if (dflags & INST_ENT) {
       cbv->entnot_offset = cbv->dtb_len - len;
       cbv->entnot_len = len;
@@ -773,7 +858,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
     goto declaration_end;
 
   case PS_Elementname:
-    cbv->local_parse_state = PS_Elcontent;
+    cbv->dtdparse_state = PS_Elcontent;
     if (dflags & INST_ELE) {
       cbv->elnam_offset = cbv->dtb_len - len;
       cbv->elnam_len = len;
@@ -795,7 +880,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
     break;
 
   case PS_Attelname:
-    cbv->local_parse_state = PS_Attdef;
+    cbv->dtdparse_state = PS_Attdef;
     if (dflags & INST_ATT) {
       cbv->elnam_offset = cbv->dtb_len - len;
       cbv->elnam_len = len;
@@ -812,7 +897,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
       cbv->attnam_len = len;
       cbv->attfixed = 0;
     }
-    cbv->local_parse_state = PS_Atttype;
+    cbv->dtdparse_state = PS_Atttype;
     break;
 
   case PS_Atttype:
@@ -822,10 +907,10 @@ parse_local(CallbackVector *cbv, const char *str, int len)
     }
     if ((len == 1 && *str == '(')
 	|| strnEQ(str, "NOTATION", len)) {
-      cbv->local_parse_state = PS_Attmoretype;
+      cbv->dtdparse_state = PS_Attmoretype;
     }
     else {
-      cbv->local_parse_state = PS_Attval;
+      cbv->dtdparse_state = PS_Attval;
     }
     break;
 
@@ -834,7 +919,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
       cbv->atttyp_len = cbv->dtb_len - cbv->atttyp_offset;
     }
     if (len == 1 && *str == ')') {
-      cbv->local_parse_state = PS_Attval;
+      cbv->dtdparse_state = PS_Attval;
     }
     break;
 
@@ -843,7 +928,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
       cbv->attfixed = 1;
     }
     else {
-      cbv->local_parse_state = PS_Attdef;
+      cbv->dtdparse_state = PS_Attdef;
       if (dflags & INST_ATT) {
 	dSP;
 	char *elname = &(cbv->doctype_buffer[cbv->elnam_offset]);
@@ -863,14 +948,14 @@ parse_local(CallbackVector *cbv, const char *str, int len)
 	if (cbv->attfixed)
 	  XPUSHs(&PL_sv_yes);
 	PUTBACK;
-	perl_call_sv(cbv->attdcl_sv, G_VOID);
+	perl_call_sv(cbv->attdcl_sv, G_DISCARD);
 
 	cbv->in_local_hndlr = 0;
       }
     }
     break;
 
-  }  /* End of switch(cbv->local_parse_state) */
+  }  /* End of switch(cbv->dtdparse_state) */
 
   return 1;
 
@@ -899,7 +984,7 @@ declaration_end:
 	XPUSHs(sv_2mortal(nmsv));
 	XPUSHs(sv_2mortal(mynewSVpv(val, cbv->entval_len)));
 	PUTBACK;
-	perl_call_sv(cbv->entdcl_sv, G_VOID);
+	perl_call_sv(cbv->entdcl_sv, G_DISCARD);
 
 	cbv->in_local_hndlr = 0;
 	called_handler = 1;
@@ -937,7 +1022,7 @@ declaration_end:
 	  XPUSHs(sv_2mortal(mynewSVpv(notation, cbv->entnot_len)));
 	}
 	PUTBACK;
-	perl_call_sv(cbv->entdcl_sv, G_VOID);
+	perl_call_sv(cbv->entdcl_sv, G_DISCARD);
 
 	cbv->in_local_hndlr = 0;
 	called_handler = 1;
@@ -956,7 +1041,7 @@ declaration_end:
 	XPUSHs(sv_2mortal(mynewSVpv(name, cbv->elnam_len)));
 	XPUSHs(sv_2mortal(mynewSVpv(model, cbv->model_len)));
 	PUTBACK;
-	perl_call_sv(cbv->eledcl_sv, G_VOID);
+	perl_call_sv(cbv->eledcl_sv, G_DISCARD);
 
 	cbv->in_local_hndlr = 0;
 	called_handler = 1;
@@ -981,10 +1066,12 @@ declaration_end:
     XPUSHs(cbv->self_sv);
     XPUSHs(sv_2mortal(mynewSVpv(start, cbv->dtb_len - cbv->dtb_offset)));
     PUTBACK;
-    perl_call_sv(cbv->dflt_sv, G_VOID);
+    perl_call_sv(cbv->dflt_sv, G_DISCARD);
   }
 
-  cbv->local_parse_state = PS_Internaldecl;
+  cbv->dtdparse_state = (cbv->externalsubset
+			 ? PS_Externaldecl
+			 : PS_Internaldecl);
   return 1;
 
 doctype_end:
@@ -1018,14 +1105,14 @@ doctype_end:
     if (intsub)
       XPUSHs(sv_2mortal(mynewSVpv(intsub, cbv->intsub_len)));
     PUTBACK;
-    perl_call_sv(cbv->doctyp_sv, G_VOID);
+    perl_call_sv(cbv->doctyp_sv, G_DISCARD);
 
     cbv->in_local_hndlr = 0;
   }
-  cbv->local_parse_state = PS_Initial;
+  cbv->dtdparse_state = PS_Initial;
   check_and_set_default_handler(cbv->p, cbv, 0, INST_LOCAL);
   return 1;
-}  /* End parse_local */
+}  /* End parse_decl */
 
 static void
 characterData(void *userData, const char *s, int len)
@@ -1041,7 +1128,7 @@ characterData(void *userData, const char *s, int len)
   PUSHs(cbv->self_sv);
   PUSHs(sv_2mortal(mynewSVpv((char*)s,len)));
   PUTBACK;
-  perl_call_sv(cbv->char_sv, G_VOID);
+  perl_call_sv(cbv->char_sv, G_DISCARD);
 
   FREETMPS;
   LEAVE;
@@ -1101,7 +1188,7 @@ startElement(void *userData, const char *name, const char **atts)
 	    PUSHs(sv_2mortal(newSVpv((char*)*atts++,0)));
 	}
       PUTBACK;
-      perl_call_sv(cbv->start_sv, G_VOID);
+      perl_call_sv(cbv->start_sv, G_DISCARD);
 
       FREETMPS;
       LEAVE;
@@ -1148,7 +1235,7 @@ endElement(void *userData, const char *name)
       PUSHs(cbv->self_sv);
       PUSHs(elname);
       PUTBACK;
-      perl_call_sv(cbv->end_sv, G_VOID);
+      perl_call_sv(cbv->end_sv, G_DISCARD);
 
       FREETMPS;
       LEAVE;
@@ -1172,7 +1259,7 @@ processingInstruction(void *userData, const char *target, const char *data)
   PUSHs(sv_2mortal(newSVpv((char*)target,0)));
   PUSHs(sv_2mortal(newSVpv((char*)data,0)));
   PUTBACK;
-  perl_call_sv(cbv->proc_sv, G_VOID);
+  perl_call_sv(cbv->proc_sv, G_DISCARD);
 
   FREETMPS;
   LEAVE;
@@ -1192,7 +1279,7 @@ commenthandle(void *userData, const char *string)
   PUSHs(cbv->self_sv);
   PUSHs(sv_2mortal(newSVpv((char*) string, 0)));
   PUTBACK;
-  perl_call_sv(cbv->cmnt_sv, G_VOID);
+  perl_call_sv(cbv->cmnt_sv, G_DISCARD);
 
   FREETMPS;
   LEAVE;
@@ -1211,7 +1298,7 @@ startCdata(void *userData)
     PUSHMARK(sp);
     XPUSHs(cbv->self_sv);
     PUTBACK;
-    perl_call_sv(cbv->startcd_sv, G_VOID);
+    perl_call_sv(cbv->startcd_sv, G_DISCARD);
 
     FREETMPS;
     LEAVE;
@@ -1231,7 +1318,7 @@ endCdata(void *userData)
     PUSHMARK(sp);
     XPUSHs(cbv->self_sv);
     PUTBACK;
-    perl_call_sv(cbv->endcd_sv, G_VOID);
+    perl_call_sv(cbv->endcd_sv, G_DISCARD);
 
     FREETMPS;
     LEAVE;
@@ -1252,7 +1339,7 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
   PUSHs(prefix ? sv_2mortal(newSVpv((char *)prefix, 0)) : &PL_sv_undef);
   PUSHs(uri ? sv_2mortal(newSVpv((char *)uri, 0)) : &PL_sv_undef);
   PUTBACK;
-  perl_call_method("NamespaceStart", G_VOID);
+  perl_call_method("NamespaceStart", G_DISCARD);
 
   FREETMPS;
   LEAVE;
@@ -1271,7 +1358,7 @@ nsEnd(void *userdata, const XML_Char *prefix) {
   PUSHs(cbv->self_sv);
   PUSHs(prefix ? sv_2mortal(newSVpv((char *)prefix, 0)) : &PL_sv_undef);
   PUTBACK;
-  perl_call_method("NamespaceEnd", G_VOID);
+  perl_call_method("NamespaceEnd", G_DISCARD);
 
   FREETMPS;
   LEAVE;
@@ -1284,7 +1371,7 @@ defaulthandle(void *userData, const char *string, int len)
   CallbackVector* cbv = (CallbackVector*) userData;
 
   if (cbv->dflags & INST_LOCAL) {
-    if (parse_local(cbv, string, len))
+    if (parse_decl(cbv, string, len))
       return;
   }
 
@@ -1299,7 +1386,7 @@ defaulthandle(void *userData, const char *string, int len)
   PUSHs(cbv->self_sv);
   PUSHs(sv_2mortal(mynewSVpv((char*)string, len)));
   PUTBACK;
-  perl_call_sv(cbv->dflt_sv, G_VOID);
+  perl_call_sv(cbv->dflt_sv, G_DISCARD);
 
   FREETMPS;
   LEAVE;
@@ -1328,7 +1415,7 @@ unparsedEntityDecl(void *userData,
   PUSHs(pubid ? sv_2mortal(newSVpv((char*) pubid, 0)) : &PL_sv_undef);
   PUSHs(sv_2mortal(newSVpv((char*) notation, 0)));
   PUTBACK;
-  perl_call_sv(cbv->unprsd_sv, G_VOID);
+  perl_call_sv(cbv->unprsd_sv, G_DISCARD);
 
   FREETMPS;
   LEAVE;
@@ -1369,7 +1456,7 @@ notationDecl(void *userData,
     XPUSHs(sv_2mortal(newSVpv((char *) pubid, 0)));
 
   PUTBACK;
-  perl_call_sv(cbv->notation_sv, G_VOID);
+  perl_call_sv(cbv->notation_sv, G_DISCARD);
 }  /* End notationDecl */
 
 static int
@@ -1553,7 +1640,7 @@ unknownEncoding(void *unused, const char *name, XML_Encoding *info)
     PUSHMARK(sp);
     XPUSHs(sv_2mortal(mynewSVpv(buff,namelen)));
     PUTBACK;
-    perl_call_pv("XML::Parser::Expat::load_encoding", G_VOID);
+    perl_call_pv("XML::Parser::Expat::load_encoding", G_DISCARD);
     
     encinfptr = hv_fetch(EncodingTable, buff, namelen, 0);
     FREETMPS;
@@ -1642,6 +1729,7 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
     CODE:
 	{
 	  CallbackVector *cbv;
+	  enum XML_ParamEntityParsing pep = XML_PARAM_ENTITY_PARSING_NEVER;
 	  char *enc = (char *) (SvTRUE(enc_sv) ? SvPV(enc_sv,PL_na) : 0);
 	  SV ** spp;
 
@@ -1693,6 +1781,16 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 	  XML_SetUserData(RETVAL, (void *) cbv);
 	  XML_SetElementHandler(RETVAL, startElement, endElement);
 	  XML_SetUnknownEncodingHandler(RETVAL, unknownEncoding, 0);
+
+	  spp = hv_fetch((HV*)SvRV(cbv->self_sv), "ParseParamEnt",
+			 13, FALSE);
+
+	  if (spp && SvTRUE(*spp)) {
+	    pep = XML_PARAM_ENTITY_PARSING_UNLESS_STANDALONE;
+	    cbv->parseparam = 1;
+	  }	
+
+	  XML_SetParamEntityParsing(RETVAL, pep);
 	}
     OUTPUT:
 	RETVAL
@@ -1859,7 +1957,7 @@ XML_ParseDone(parser)
     OUTPUT:
 	RETVAL
 
-void
+SV *
 XML_SetStartElementHandler(parser, start_sv)
 	XML_Parser			parser
 	SV *				start_sv
@@ -1868,8 +1966,10 @@ XML_SetStartElementHandler(parser, start_sv)
 	  CallbackVector * cbv = (CallbackVector*) XML_GetUserData(parser);
 	  XMLP_UPD(start_sv);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetEndElementHandler(parser, end_sv)
 	XML_Parser			parser
 	SV *				end_sv
@@ -1878,8 +1978,10 @@ XML_SetEndElementHandler(parser, end_sv)
 	  CallbackVector *cbv = (CallbackVector*) XML_GetUserData(parser);
 	  XMLP_UPD(end_sv);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetCharacterDataHandler(parser, char_sv)
 	XML_Parser			parser
 	SV *				char_sv
@@ -1896,8 +1998,10 @@ XML_SetCharacterDataHandler(parser, char_sv)
 
 	  XML_SetCharacterDataHandler(parser, charhndl);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetProcessingInstructionHandler(parser, proc_sv)
 	XML_Parser			parser
 	SV *				proc_sv
@@ -1915,8 +2019,10 @@ XML_SetProcessingInstructionHandler(parser, proc_sv)
 
 	  XML_SetProcessingInstructionHandler(parser, prochndl);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetCommentHandler(parser, cmnt_sv)
 	XML_Parser			parser
 	SV *				cmnt_sv
@@ -1933,8 +2039,10 @@ XML_SetCommentHandler(parser, cmnt_sv)
 
 	  XML_SetCommentHandler(parser, cmnthndl);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetDefaultHandler(parser, dflt_sv)
 	XML_Parser			parser
 	SV *				dflt_sv
@@ -1951,8 +2059,10 @@ XML_SetDefaultHandler(parser, dflt_sv)
 
 	  check_and_set_default_handler(parser, cbv, set, INST_DFL);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetUnparsedEntityDeclHandler(parser, unprsd_sv)
 	XML_Parser			parser
 	SV *				unprsd_sv
@@ -1970,8 +2080,10 @@ XML_SetUnparsedEntityDeclHandler(parser, unprsd_sv)
 
 	  XML_SetUnparsedEntityDeclHandler(parser, unprsdhndl);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetNotationDeclHandler(parser, notation_sv)
 	XML_Parser			parser
 	SV *				notation_sv
@@ -1988,8 +2100,10 @@ XML_SetNotationDeclHandler(parser, notation_sv)
 
 	  XML_SetNotationDeclHandler(parser, nothndlr);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetExternalEntityRefHandler(parser, extent_sv)
 	XML_Parser			parser
 	SV *				extent_sv
@@ -2007,8 +2121,10 @@ XML_SetExternalEntityRefHandler(parser, extent_sv)
 
 	  XML_SetExternalEntityRefHandler(parser, exthndlr);
 	}
+    OUTPUT:
+        RETVAL
 	   
-void
+SV *
 XML_SetEntityDeclHandler(parser, entdcl_sv)
 	XML_Parser			parser
 	SV *				entdcl_sv
@@ -2025,8 +2141,10 @@ XML_SetEntityDeclHandler(parser, entdcl_sv)
 
 	  check_and_set_default_handler(parser, cbv, set, INST_ENT);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetElementDeclHandler(parser, eledcl_sv)
 	XML_Parser			parser
 	SV *				eledcl_sv
@@ -2043,8 +2161,10 @@ XML_SetElementDeclHandler(parser, eledcl_sv)
 
 	  check_and_set_default_handler(parser, cbv, set, INST_ELE);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetAttListDeclHandler(parser, attdcl_sv)
 	XML_Parser			parser
 	SV *				attdcl_sv
@@ -2061,8 +2181,10 @@ XML_SetAttListDeclHandler(parser, attdcl_sv)
 
 	  check_and_set_default_handler(parser, cbv, set, INST_ATT);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetDoctypeHandler(parser, doctyp_sv)
 	XML_Parser			parser
 	SV *				doctyp_sv
@@ -2079,8 +2201,10 @@ XML_SetDoctypeHandler(parser, doctyp_sv)
 
 	  check_and_set_default_handler(parser, cbv, set, INST_DOC);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetXMLDeclHandler(parser, xmldec_sv)
 	XML_Parser			parser
 	SV *				xmldec_sv
@@ -2096,6 +2220,8 @@ XML_SetXMLDeclHandler(parser, xmldec_sv)
 
 	  check_and_set_default_handler(parser, cbv, set, INST_XML);
 	}
+    OUTPUT:
+        RETVAL
 
 int
 XML_SetBase(parser, base)
@@ -2223,7 +2349,7 @@ XML_DefaultCurrent(parser)
 					  + cbv->dtb_offset,
 					  cbv->dtb_len - cbv->dtb_offset)));
 	      PUTBACK;
-	      perl_call_sv(cbv->dflt_sv, G_VOID);
+	      perl_call_sv(cbv->dflt_sv, G_DISCARD);
 	    }
 	    else
 	      XML_DefaultCurrent(parser);
@@ -2422,7 +2548,7 @@ XML_OriginalString(parser)
     OUTPUT:
 	RETVAL
 
-void
+SV *
 XML_SetStartCdataHandler(parser, startcd_sv)
 	XML_Parser			parser
 	SV *				startcd_sv
@@ -2450,8 +2576,10 @@ XML_SetStartCdataHandler(parser, startcd_sv)
 
 	  XML_SetCdataSectionHandler(parser, scdhndl, ecdhndl);
 	}
+    OUTPUT:
+        RETVAL
 
-void
+SV *
 XML_SetEndCdataHandler(parser, endcd_sv)
 	XML_Parser			parser
 	SV *				endcd_sv
@@ -2479,6 +2607,8 @@ XML_SetEndCdataHandler(parser, endcd_sv)
 
 	  XML_SetCdataSectionHandler(parser, scdhndl, ecdhndl);
 	}
+    OUTPUT:
+        RETVAL
 
 void
 XML_UnsetAllHandlers(parser)

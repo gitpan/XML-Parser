@@ -6,17 +6,14 @@ Expat/README			comments about expat library
 Expat/encoding.h		Header file; describes *.enc structure
 Expat/typemap			XS typemap
 Expat/expat.patches		expat patches (may be empty)
-Expat/expat/MPL-1_0.html
 Expat/expat/Makefile
 Expat/expat/bin/xmlparse.dll
 Expat/expat/bin/xmltok.dll
 Expat/expat/bin/xmlwf.exe
 Expat/expat/expat.dsw
 Expat/expat/expat.html
-Expat/expat/expat.mak
 Expat/expat/gennmtab/gennmtab.c
 Expat/expat/gennmtab/gennmtab.dsp
-Expat/expat/gplelect.html
 Expat/expat/lib/xmlparse.lib
 Expat/expat/lib/xmltok.lib
 Expat/expat/sample/build.bat
@@ -58,6 +55,7 @@ Parser.pm			XML::Parser module
 Parser/Encodings/Japanese_Encodings.msg	Message about Japanese encodings.
 Parser/Encodings/README		Info about encoding maps
 Parser/Encodings/big5.enc	Big5 binary encoding map
+Parser/Encodings/euc-kr.enc	EUC-KR binary encoding map
 Parser/Encodings/iso-8859-2.enc	ISO-8859-2 binary encoding map
 Parser/Encodings/iso-8859-3.enc	ISO-8859-3 binary encoding map
 Parser/Encodings/iso-8859-4.enc	ISO-8859-4 binary encoding map
@@ -85,6 +83,8 @@ t/encoding.t			Test script
 t/external_ent.t		Test script
 t/file.t			Test script
 t/finish.t			Test script
+t/foo.dtd			External DTD for parament.t test
 t/namespaces.t			Test script
+t/parament.t			Test script
 t/partial.t			Test script
 t/stream.t			Test script

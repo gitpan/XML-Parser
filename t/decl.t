@@ -6,7 +6,7 @@ print "ok 1\n";
 
 my $docstr =<<'End_of_Doc;';
 <?xml version="1.0" encoding="US-ASCII" ?>
-<!DOCTYPE foo SYSTEM 'foo.dtd'
+<!DOCTYPE foo SYSTEM 't/foo.dtd'
   [
    <!ENTITY alpha 'a'>
    <!ELEMENT junk (bar|xyz+)>
@@ -77,7 +77,7 @@ sub doc {
     my ($p, $name, $sys, $pub, $intdecl) = @_;
 
     $tests[11]++ if $name eq 'foo';
-    $tests[12]++ if $sys eq 'foo.dtd';
+    $tests[12]++ if $sys eq 't/foo.dtd';
     $tests[13]++ if length($intdecl) == 439;
 }
 

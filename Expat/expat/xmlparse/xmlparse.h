@@ -1,6 +1,6 @@
 /*
 The contents of this file are subject to the Mozilla Public License
-Version 1.0 (the "License"); you may not use this file except in
+Version 1.1 (the "License"); you may not use this file except in
 compliance with the License. You may obtain a copy of the License at
 http://www.mozilla.org/MPL/
 
@@ -12,10 +12,20 @@ under the License.
 The Original Code is expat.
 
 The Initial Developer of the Original Code is James Clark.
-Portions created by James Clark are Copyright (C) 1998
+Portions created by James Clark are Copyright (C) 1998, 1999
 James Clark. All Rights Reserved.
 
 Contributor(s):
+
+Alternatively, the contents of this file may be used under the terms
+of the GNU General Public License (the "GPL"), in which case the
+provisions of the GPL are applicable instead of those above.  If you
+wish to allow use of your version of this file only under the terms of
+the GPL and not to allow others to use your version of this file under
+the MPL, indicate your decision by deleting the provisions above and
+replace them with the notice and other provisions required by the
+GPL. If you do not delete the provisions above, a recipient may use
+your version of this file under either the MPL or the GPL.
 */
 
 #ifndef XmlParse_INCLUDED
@@ -404,6 +414,35 @@ XML_Parser XMLPARSEAPI
 XML_ExternalEntityParserCreate(XML_Parser parser,
 			       const XML_Char *context,
 			       const XML_Char *encoding);
+
+enum XML_ParamEntityParsing {
+  XML_PARAM_ENTITY_PARSING_NEVER,
+  XML_PARAM_ENTITY_PARSING_UNLESS_STANDALONE,
+  XML_PARAM_ENTITY_PARSING_ALWAYS
+};
+
+/* Controls parsing of parameter entities (including the external DTD
+subset). If parsing of parameter entities is enabled, then references
+to external parameter entities (including the external DTD subset)
+will be passed to the handler set with
+XML_SetExternalEntityRefHandler.  The context passed will be 0.
+Unlike external general entities, external parameter entities can only
+be parsed synchronously.  If the external parameter entity is to be
+parsed, it must be parsed during the call to the external entity ref
+handler: the complete sequence of XML_ExternalEntityParserCreate,
+XML_Parse/XML_ParseBuffer and XML_ParserFree calls must be made during
+this call.  After XML_ExternalEntityParserCreate has been called to
+create the parser for the external parameter entity (context must be 0
+for this call), it is illegal to make any calls on the old parser
+until XML_ParserFree has been called on the newly created parser.  If
+the library has been compiled without support for parameter entity
+parsing (ie without XML_DTD being defined), then
+XML_SetParamEntityParsing will return 0 if parsing of parameter
+entities is requested; otherwise it will return non-zero. */
+
+int XMLPARSEAPI
+XML_SetParamEntityParsing(XML_Parser parser,
+			  enum XML_ParamEntityParsing parsing);
 
 enum XML_Error {
   XML_ERROR_NONE,

@@ -1,6 +1,6 @@
 /*
 The contents of this file are subject to the Mozilla Public License
-Version 1.0 (the "License"); you may not use this file except in
+Version 1.1 (the "License"); you may not use this file except in
 compliance with the License. You may obtain a copy of the License at
 http://www.mozilla.org/MPL/
 
@@ -12,10 +12,20 @@ under the License.
 The Original Code is expat.
 
 The Initial Developer of the Original Code is James Clark.
-Portions created by James Clark are Copyright (C) 1998
+Portions created by James Clark are Copyright (C) 1998, 1999
 James Clark. All Rights Reserved.
 
 Contributor(s):
+
+Alternatively, the contents of this file may be used under the terms
+of the GNU General Public License (the "GPL"), in which case the
+provisions of the GPL are applicable instead of those above.  If you
+wish to allow use of your version of this file only under the terms of
+the GPL and not to allow others to use your version of this file under
+the MPL, indicate your decision by deleting the provisions above and
+replace them with the notice and other provisions required by the
+GPL. If you do not delete the provisions above, a recipient may use
+your version of this file under either the MPL or the GPL.
 */
 
 #include <stdio.h>
@@ -268,7 +278,7 @@ void metaStartElement(XML_Parser parser, const XML_Char *name, const XML_Char **
       ftprintf(fp, T("<attribute name=\"%s\" value=\""), atts[0]);
       characterData(fp, atts[1], tcslen(atts[1]));
       if (atts >= specifiedAttsEnd)
-	fputs(T("\" defaulted=\"yes\"/>\n"), fp);
+	fputts(T("\" defaulted=\"yes\"/>\n"), fp);
       else
 	fputts(T("\"/>\n"), fp);
     } while (*(atts += 2));
@@ -459,7 +469,7 @@ int notStandalone(void *userData)
 static
 void usage(const XML_Char *prog)
 {
-  ftprintf(stderr, T("usage: %s [-n] [-r] [-s] [-w] [-x] [-d output-dir] [-e encoding] file ...\n"), prog);
+  ftprintf(stderr, T("usage: %s [-n] [-p] [-r] [-s] [-w] [-x] [-d output-dir] [-e encoding] file ...\n"), prog);
   exit(1);
 }
 
@@ -473,6 +483,7 @@ int tmain(int argc, XML_Char **argv)
   int outputType = 0;
   int useNamespaces = 0;
   int requireStandalone = 0;
+  int paramEntityParsing = XML_PARAM_ENTITY_PARSING_NEVER;
 
 #ifdef _MSC_VER
   _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF|_CRTDBG_LEAK_CHECK_DF);
@@ -503,6 +514,9 @@ int tmain(int argc, XML_Char **argv)
       useNamespaces = 1;
       j++;
       break;
+    case T('p'):
+      paramEntityParsing = XML_PARAM_ENTITY_PARSING_ALWAYS;
+      /* fall through */
     case T('x'):
       processFlags |= XML_EXTERNAL_ENTITIES;
       j++;
@@ -570,6 +584,7 @@ int tmain(int argc, XML_Char **argv)
       parser = XML_ParserCreate(encoding);
     if (requireStandalone)
       XML_SetNotStandaloneHandler(parser, notStandalone);
+    XML_SetParamEntityParsing(parser, paramEntityParsing);
     if (outputType == 't') {
       /* This is for doing timings; this gives a more realistic estimate of
 	 the parsing time. */

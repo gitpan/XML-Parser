@@ -1,5 +1,25 @@
 Revision history for Perl extension XML::Parser.
 
+2.24  Thu Jul  8 23:05:50 EDT 1999
+	- KangChan Lee <dolphin@comeng.chungnam.ac.kr> supplied the
+	  EUC-KR encoding map.
+	- Enno Derksen <enno@att.com> forwarded reports by Jon Eisenzopf
+	  <eisen@pobox.com> and Stefaan Onderbeke <onderbes@bec.bel.alcatel.be>
+	  about a core dump using XML::DOM. This was due to a bug in the
+	  prolog parsing part of XML::Parser.
+	- Loic Dachary <loic@ceic.com> discovered that changing G_DISCARD to
+	  G_VOID introduced a small memory leak. Changed G_VOID back to
+	  G_DISCARD.
+	- As suggested by Ben Holzman <bholzman@earthlink.net>, the
+	  setHandlers methods of both Parser and Expat now return lists that
+	  consist of type, handler pairs that correspond to the input, but
+	  the handlers returned are the ones that were in effect prior to
+	  the call.
+	- Now using Version 19990626 of expat with a local patch (provided
+	  by James Clark.)
+	- Added option ParseParamEnt. When set to a true value, parameter
+	  entities are parsed and the external DTD is read (unless standalone
+	  set to "Yes" in document).
 2.23 Mon Apr 26 21:30:28 EDT 1999
 	- Fixed a bug in the ExpatNB class reported by Gabe Beged-Dov
 	  <begeddov@jfinity.com>. The ErrorMessage attribute wasn't

@@ -13,7 +13,7 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.23" ;
+$VERSION = "2.24" ;
 
 $have_File_Spec = do 'File/Spec.pm';
 
@@ -108,9 +108,14 @@ sub setHandlers {
   croak("Uneven number of arguments to setHandlers method")
     if (int(@handler_pairs) & 1);
 
+  my @ret;
+
   while (@handler_pairs) {
     my $type = shift @handler_pairs;
     my $handler = shift @handler_pairs;
+    croak "Handler for $type not a Code ref"
+      unless (! defined($handler) or ! $handler or ref($handler) eq 'CODE');
+
     my $hndl = $self->{_Setters}->{$type};
 
     unless (defined($hndl)) {
@@ -118,8 +123,11 @@ sub setHandlers {
       croak("Unknown Expat handler type: $type\n Valid types: @types");
     }
 
-    &$hndl($self->{Parser}, $handler);
+    my $old = &$hndl($self->{Parser}, $handler);
+    push (@ret, $type, $old);
   }
+
+  return @ret;
 }
 
 sub xpcroak {
@@ -631,6 +639,12 @@ When this option is defined, errors are reported in context. The value
 of ErrorContext should be the number of lines to show on either side of
 the line in which the error occurred.
 
+=item * ParseParamEnt
+
+Unless standalone is set to "yes" in the XML declaration, setting this to
+a true value allows the external DTD to be read, and parameter entities
+to be parsed and expanded.
+
 =back
 
 =item setHandlers(TYPE, HANDLER [, TYPE, HANDLER [...]])
@@ -642,6 +656,10 @@ This may be called from within a handler, after the parse has started.
 
 Setting a handler to something that evaluates to false unsets that
 handler.
+
+This method returns a list of type, handler pairs corresponding to the
+input. The handlers returned are the ones that were in effect before the
+call to setHandlers.
 
 The recognized events and the parameters passed to the corresponding
 handlers are:

@@ -16,7 +16,7 @@ sub MY::postamble {
   $ret;
 }
 
-$define = '';
+$define = '-DXML_DTD ';
 
 $define .= ($Config{cc} =~ /cl\.exe/i) ? '/Fo$@' : '-o $@';
 
