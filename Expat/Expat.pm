@@ -13,7 +13,7 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.24" ;
+$VERSION = "2.25" ;
 
 $have_File_Spec = do 'File/Spec.pm';
 

@@ -1,5 +1,14 @@
 Revision history for Perl extension XML::Parser.
 
+2.25 Fri Jul 23 06:23:43 EDT 1999
+	- Now using Version 1990709 of expat. No local patches.
+	- Numerous people reported a SEGV problem when running t/cdata
+	  on various platforms and versions of perl. The problem was
+	  introduced with the setHandlers change. In some cases an
+	  un-initialized value was being returned.
+	- Added an additional external entity handler, lwp_ext_ent_handler,
+	  that deals with general URIs. It is installed instead of the
+	  "file only" handler if the LWP package is installed.
 2.24  Thu Jul  8 23:05:50 EDT 1999
 	- KangChan Lee <dolphin@comeng.chungnam.ac.kr> supplied the
 	  EUC-KR encoding map.

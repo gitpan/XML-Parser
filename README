@@ -1,4 +1,4 @@
-			XML::Parser Version 2.24
+			XML::Parser Version 2.25
 
 Copyright (c) 1998 Larry Wall and Clark Cooper.
 All rights reserved.
@@ -48,24 +48,25 @@ install by typing:
 
 	make install
 
-Differences from Version 2.23
+Differences from Version 2.24
 =============================
 
-The major change is reading of the external subset and expansion of parameter
-entities when the ParseParamEnt option is set to a true value. This is
-possible due to a new version of expat (Version 19990626 with local patches)
-provided by James Clark. The way is now clear for the addition of a validating
-mode, which I hope to add in the near future.
+Fixed a memory bug in Expat.xs that was causing a SEGV on the cdata.t
+test (among other things).
 
-The setHandler methods now return lists that consist of type, handler pairs
-that correspond to their input, but the handlers returned are the ones that
-were in effect prior to the call. This allows stacked handler managment.
-This was requested by Ben Holzman <bholzman@earthlink.net>.
+There are now two default external entity handlers: file_ext_ent_handler
+and lwp_ext_ent_handler. The first handles just files (and file URIs). It's
+the same old handler that's been there for many versions of this package.
+The second handler will deal with general URIs.
 
-A EUC-KR encoding map provided by KangChan Lee <dolphin@comeng.chungnam.ac.kr>
-is now included in the distribution.
+If the LWP package is installed, then lwp_ext_ent_handler is registered to
+handle external entity references, otherwise file_ext_ent_handler is
+registered.
 
-A few bugs were also fixed.
+Both of these handlers will choke on huge external entities, since they
+read the entire entity before passing it on to the parser.
+
+You still have the option of setting your own handler.
 
 Clark Cooper
   coopercc@netheaven.com

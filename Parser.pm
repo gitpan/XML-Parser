@@ -8,16 +8,24 @@
 
 package XML::Parser;
 
-use strict;
-use vars qw($VERSION %Built_In_Styles);
+use vars qw($VERSION %Built_In_Styles $have_LWP);
 use Carp;
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.24';
+  $VERSION = '2.25';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
+  eval {
+    require 'LWP.pm';
+  };
+  $have_LWP = not $@;
+  if ($have_LWP) {
+    import LWP;
+  }
 }
+
+use strict;
 
 sub new {
   my ($class, %args) = @_;
@@ -79,7 +87,9 @@ sub new {
     }
   }
   
-  $handlers->{ExternEnt} ||= \&default_ext_ent_handler;
+  $handlers->{ExternEnt} ||= ($have_LWP
+			      ? \&lwp_ext_ent_handler
+			      : \&file_ext_ent_handler);
 
   $args{Pkg} ||= caller;
   bless \%args, $class;
@@ -205,7 +215,7 @@ sub parsefile {
 
 my %External_Entity_Table = ();
 
-sub default_ext_ent_handler {
+sub file_ext_ent_handler {
   my ($exp, $base, $sys) = @_;	# We don't use pub id
 
   local(*ENT);
@@ -224,21 +234,24 @@ sub default_ext_ent_handler {
     my $method = $1;
 
     unless ($method eq 'file') {
-      warn "Default external entity handler only deals with file URLs.";
+      $exp->{ErrorMessage}
+	.= "\nDefault external entity handler only deals with file URLs.";
       return undef;
     }
   }
 
   if ($name =~ /^[|>+]/
       or $name =~ /\|$/) {
-    warn "Perl IO controls not permitted in system id";
+    $exp->{ErrorMessage}
+	.= "Perl IO controls not permitted in system id";
     return undef;
   }
 
   my $def = $External_Entity_Table{$name};
   if (! defined($def)) {
     unless (open(ENT, $name)) {
-      warn "Failed to open $name: $!";
+      $exp->{ErrorMessage}
+	.= "Failed to open $name: $!";
       return undef;
     }
     my $status;
@@ -246,7 +259,8 @@ sub default_ext_ent_handler {
     close(ENT);
 
     unless (defined($status)) {
-      warn "Error reading $name: $!";
+      $exp->{ErrorMessage}
+	.= "Error reading $name: $!";
       return undef;
     }
 
@@ -254,7 +268,37 @@ sub default_ext_ent_handler {
   }
 
   return $def;
-}  # End default_ext_ent_handler
+}  # End file_ext_ent_handler
+
+##
+## Note that this external entity handler reads the entire entity into
+## memory, so it will choke on huge ones.
+##
+sub lwp_ext_ent_handler {
+  my ($exp, $base, $sys) = @_;  # We don't use public id
+
+  my $uri = new URI($sys);
+  if (not $uri->scheme and $base) {
+    $uri = $uri->abs($base);
+  }
+  
+  my $scheme = $uri->scheme;
+  if (not $scheme or $scheme eq 'file') {
+    return file_ext_ent_handler($exp, $base, $sys);
+  }
+
+  my $ua = ($exp->{_lwpagent} ||= LWP::UserAgent->new);
+
+  my $req = new HTTP::Request('GET', $uri);
+
+  my $res = $ua->request($req);
+  if ($res->is_error) {
+    $exp->{ErrorMessage} .= "\n" . $res->status_line;
+    return undef;
+  }
+  
+  return $res->content;
+}  # End lwp_ext_ent_handler
 
 ###################################################################
 

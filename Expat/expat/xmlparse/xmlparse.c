@@ -1954,6 +1954,8 @@ enum XML_Error doIgnoreSection(XML_Parser parser,
   *eventEndPP = next;
   switch (tok) {
   case XML_TOK_IGNORE_SECT:
+    if (defaultHandler)
+      reportDefault(parser, enc, s, next);
     *startPtr = next;
     return XML_ERROR_NONE;
   case XML_TOK_INVALID:
@@ -2590,11 +2592,14 @@ doProlog(XML_Parser parser,
       case XML_TOK_COMMENT:
       case XML_TOK_BOM:
       case XML_TOK_XML_DECL:
+#ifdef XML_DTD
       case XML_TOK_IGNORE_SECT:
+#endif /* XML_DTD */
       case XML_TOK_PARAM_ENTITY_REF:
 	break;
       default:
-	reportDefault(parser, enc, s, next);
+	if (role != XML_ROLE_IGNORE_SECT)
+	  reportDefault(parser, enc, s, next);
       }
     }
     s = next;

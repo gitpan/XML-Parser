@@ -34,13 +34,13 @@
 #define DTB_GROW 4096
 
 #define XMLP_UPD(fld) \
+  RETVAL = cbv->fld ? newSVsv(cbv->fld) : &PL_sv_undef;\
   if (cbv->fld) {\
-    RETVAL = newSVsv(cbv->fld);\
     if (cbv->fld != fld)\
       Perl_sv_setsv(cbv->fld, fld);\
   }\
   else\
-    ((RETVAL = &PL_sv_undef), cbv->fld = newSVsv(fld))
+    cbv->fld = newSVsv(fld)
 
 /* These are flags set in the dflags field. They indicate whether the
    corresponding handler is set. All these handlers actually use expat's
@@ -1990,11 +1990,9 @@ XML_SetCharacterDataHandler(parser, char_sv)
 	  XML_CharacterDataHandler charhndl = (XML_CharacterDataHandler) 0;
 	  CallbackVector * cbv = (CallbackVector*) XML_GetUserData(parser);
 
+	  XMLP_UPD(char_sv);
 	  if (SvTRUE(char_sv))
-	    {
-	      XMLP_UPD(char_sv);
-	      charhndl = characterData;
-	    }
+	    charhndl = characterData;
 
 	  XML_SetCharacterDataHandler(parser, charhndl);
 	}
@@ -2011,11 +2009,9 @@ XML_SetProcessingInstructionHandler(parser, proc_sv)
 	    (XML_ProcessingInstructionHandler) 0;
 	  CallbackVector* cbv = (CallbackVector*) XML_GetUserData(parser);
 
+	  XMLP_UPD(proc_sv);
 	  if (SvTRUE(proc_sv))
-	    {
-	      XMLP_UPD(proc_sv);
-	      prochndl = processingInstruction;
-	    }
+	    prochndl = processingInstruction;
 
 	  XML_SetProcessingInstructionHandler(parser, prochndl);
 	}
@@ -2031,11 +2027,9 @@ XML_SetCommentHandler(parser, cmnt_sv)
 	  XML_CommentHandler cmnthndl = (XML_CommentHandler) 0;
 	  CallbackVector * cbv = (CallbackVector*) XML_GetUserData(parser);
 
+	  XMLP_UPD(cmnt_sv);
 	  if (SvTRUE(cmnt_sv))
-	    {
-	      XMLP_UPD(cmnt_sv);
-	      cmnthndl = commenthandle;
-	    }
+	    cmnthndl = commenthandle;
 
 	  XML_SetCommentHandler(parser, cmnthndl);
 	}
@@ -2051,11 +2045,9 @@ XML_SetDefaultHandler(parser, dflt_sv)
 	  CallbackVector * cbv = (CallbackVector*) XML_GetUserData(parser);
 	  int set = 0;
 
+	  XMLP_UPD(dflt_sv);
 	  if (SvTRUE(dflt_sv))
-	    {
-	      XMLP_UPD(dflt_sv);
-	      set = 1;
-	    }
+	    set = 1;
 
 	  check_and_set_default_handler(parser, cbv, set, INST_DFL);
 	}
@@ -2072,11 +2064,9 @@ XML_SetUnparsedEntityDeclHandler(parser, unprsd_sv)
 	    (XML_UnparsedEntityDeclHandler) 0;
 	  CallbackVector * cbv = (CallbackVector*) XML_GetUserData(parser);
 
+	  XMLP_UPD(unprsd_sv);
 	  if (SvTRUE(unprsd_sv))
-	    {
-	      XMLP_UPD(unprsd_sv);
-	      unprsdhndl = unparsedEntityDecl;
-	    }
+	    unprsdhndl = unparsedEntityDecl;
 
 	  XML_SetUnparsedEntityDeclHandler(parser, unprsdhndl);
 	}
@@ -2092,11 +2082,9 @@ XML_SetNotationDeclHandler(parser, notation_sv)
 	  XML_NotationDeclHandler nothndlr = (XML_NotationDeclHandler) 0;
 	  CallbackVector * cbv = (CallbackVector*) XML_GetUserData(parser);
 
+	  XMLP_UPD(notation_sv);
 	  if (SvTRUE(notation_sv))
-	    {
-	      XMLP_UPD(notation_sv);
-	      nothndlr = notationDecl;
-	    }
+	    nothndlr = notationDecl;
 
 	  XML_SetNotationDeclHandler(parser, nothndlr);
 	}
@@ -2113,11 +2101,9 @@ XML_SetExternalEntityRefHandler(parser, extent_sv)
 	    (XML_ExternalEntityRefHandler) 0;
 	  CallbackVector * cbv = (CallbackVector*) XML_GetUserData(parser);
 
+	  XMLP_UPD(extent_sv);
 	  if (SvTRUE(extent_sv))
-	    {
-	      XMLP_UPD(extent_sv);
-	      exthndlr = externalEntityRef;
-	    }
+	    exthndlr = externalEntityRef;
 
 	  XML_SetExternalEntityRefHandler(parser, exthndlr);
 	}
@@ -2133,11 +2119,9 @@ XML_SetEntityDeclHandler(parser, entdcl_sv)
 	  CallbackVector * cbv = (CallbackVector*) XML_GetUserData(parser);
 	  int set = 0;
 
+	  XMLP_UPD(entdcl_sv);
 	  if (SvTRUE(entdcl_sv))
-	    {
-	      XMLP_UPD(entdcl_sv);
-	      set = 1;
-	    }
+	    set = 1;
 
 	  check_and_set_default_handler(parser, cbv, set, INST_ENT);
 	}
@@ -2153,11 +2137,9 @@ XML_SetElementDeclHandler(parser, eledcl_sv)
 	  CallbackVector * cbv = (CallbackVector*) XML_GetUserData(parser);
 	  int set = 0;
 
+	  XMLP_UPD(eledcl_sv);
 	  if (SvTRUE(eledcl_sv))
-	    {
-	      XMLP_UPD(eledcl_sv);
-	      set = 1;
-	    }
+	    set = 1;
 
 	  check_and_set_default_handler(parser, cbv, set, INST_ELE);
 	}
@@ -2173,11 +2155,9 @@ XML_SetAttListDeclHandler(parser, attdcl_sv)
 	  CallbackVector * cbv = (CallbackVector*) XML_GetUserData(parser);
 	  int set = 0;
 
+	  XMLP_UPD(attdcl_sv);
 	  if (SvTRUE(attdcl_sv))
-	    {
-	      XMLP_UPD(attdcl_sv);
-	      set = 1;
-	    }
+	    set = 1;
 
 	  check_and_set_default_handler(parser, cbv, set, INST_ATT);
 	}
@@ -2193,11 +2173,9 @@ XML_SetDoctypeHandler(parser, doctyp_sv)
 	  CallbackVector * cbv = (CallbackVector*) XML_GetUserData(parser);
 	  int set = 0;
 
+	  XMLP_UPD(doctyp_sv);
 	  if (SvTRUE(doctyp_sv))
-	    {
-	      XMLP_UPD(doctyp_sv);
-	      set = 1;
-	    }
+	    set = 1;
 
 	  check_and_set_default_handler(parser, cbv, set, INST_DOC);
 	}
@@ -2213,10 +2191,9 @@ XML_SetXMLDeclHandler(parser, xmldec_sv)
 	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 	  int set = 0;
 
-	  if (SvTRUE(xmldec_sv)) {
-	    XMLP_UPD(xmldec_sv);
+	  XMLP_UPD(xmldec_sv);
+	  if (SvTRUE(xmldec_sv))
 	    set = 1;
-	  }
 
 	  check_and_set_default_handler(parser, cbv, set, INST_XML);
 	}
@@ -2560,18 +2537,11 @@ XML_SetStartCdataHandler(parser, startcd_sv)
 	  XML_EndCdataSectionHandler ecdhndl =
 	    (XML_EndCdataSectionHandler) 0;
 
+	  XMLP_UPD(startcd_sv);
 	  if (SvTRUE(startcd_sv))
-	    {
-	      XMLP_UPD(startcd_sv);
-	      scdhndl = startCdata;
-	    }
-	  else
-	    {
-	      SvREFCNT_dec(cbv->startcd_sv);
-	      cbv->startcd_sv = (SV *) 0;
-	    }
+	    scdhndl = startCdata;
 
-	  if (cbv->endcd_sv)
+	  if (cbv->endcd_sv && SvTRUE(cbv->endcd_sv))
 	    ecdhndl = endCdata;
 
 	  XML_SetCdataSectionHandler(parser, scdhndl, ecdhndl);
@@ -2591,18 +2561,11 @@ XML_SetEndCdataHandler(parser, endcd_sv)
 	  XML_EndCdataSectionHandler ecdhndl =
 	    (XML_EndCdataSectionHandler) 0;
 
+	  XMLP_UPD(endcd_sv);
 	  if (SvTRUE(endcd_sv))
-	    {
-	      XMLP_UPD(endcd_sv);
-	      ecdhndl = endCdata;
-	    }
-	  else
-	    {
-	      SvREFCNT_dec(cbv->endcd_sv);
-	      cbv->endcd_sv = (SV *) 0;
-	    }
+	    ecdhndl = endCdata;
 
-	  if (cbv->startcd_sv)
+	  if (cbv->startcd_sv && SvTRUE(cbv->startcd_sv))
 	    scdhndl = startCdata;
 
 	  XML_SetCdataSectionHandler(parser, scdhndl, ecdhndl);
