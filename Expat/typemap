@@ -1,0 +1,9 @@
+#
+##### XML::Parser typemap
+#
+
+XML_Parser				T_PTR
+
+INPUT
+
+OUTPUT

@@ -1,0 +1,150 @@
+Revision history for Perl extension XML::Parser.
+
+2.16
+	- Fixed bug reported by Enno Derksen <enno@att.com>:
+          Now treats parameter entity declarations correctly. The entity
+	  handler sees the name beginning with '%' if it's a parameter
+	  entity declaration.
+	- Nigel Hutchison <nwoh@software-ag.de> pointed out that stream.t
+	  wasn't portable off Unix systems. Replaced with portable version.
+	- Fixed bug reported by Enno Derksen <enno@att.com>:
+	  XML Declaration was firing off both XMLDecl handler *and* Default
+	  handler.
+	- Added option NoExpand to Expat to turn off expansion of entity
+	  references when a default handler is set.
+2.15 Tue Oct 20 14:50:11 EDT 1998
+	- In Expat's parse method, account for undefined previous
+	  record separators.
+	- Simplify a couple of Expat methods.
+	- Re-ordered Changes entries to put latest changes first.
+	- In XML::Parser::new, set Handlers if not already set
+	- New Handler (XMLDecl) for handling XML declarations
+	- New Handler (Doctype) for handling DOCTYPE declarations
+	- New Handler (Entity) for handling ENTITY declarations in
+	  the internal subset.
+	- New Handler (Element) for handling ELEMENT declarations in
+	  the internal subset.
+	- New Handler (Attlist) for handling ATTLIST declarations in
+	  the internal subset.
+	- Documented new handlers
+	- Added t/decl.t to test new handlers
+2.14 Sun Oct 11 22:17:15 EDT 1998
+	- Always use method calls for streams.
+	- Use perl's input_record_separator to find delimiter (i.e. each
+	  "line" is an entire XML doc with delimiter appended)
+	- Deal with line being longer than buffer.
+2.13 Thu Oct  8 16:58:39 EDT 1998
+	- Fixed a major oops in Expat.xs where I was trying to decrement
+	  a refcnt on an unallocated SV, leading to a segment violation.
+	  (Why did this show up on HPUX but not Linux?)
+2.12 Thu Oct  8 00:05:10 EDT 1998
+	- Incorporated fix to t/astress.t from <fletch@phydeaux.org> (Mike
+	  Fletcher).
+	- Change to xmlstats from <dblack@candle.superlink.net> (David
+	  Alan Black)
+	- Access Handlers_Setters in Expat and Handler_Types in Parser
+	  through object reference (following admonition in perltoot
+	  about class data.)
+	- Added Stream_Delimiter option to Expat.
+	- In the parse_stream function in Expat.xs, if we either have a
+	  Stream_Delimiter or if there's no file descriptor, use method
+	  calls instead. For Stream_Delimiter in particular, the function
+	  now uses the getline method so it can check for the delimiter
+	  without consuming stuff past the delimiter from the stream.
+2.11 Sun Oct  4 22:15:53 EDT 1998
+	- Swapped out local patch for expat and swapped in James Clark's
+	  patch.
+	- Pass on all Parser attributes (other than those excluded by
+	  Non_Expat_Options) to the instance of Expat created at parse time.
+	- New method for Expat:  generate_ns_name
+	- Split test.pl into t/*.t and change Makefile.PL so we don't do a
+	  useless descent into Expat subdir for testing.
+	- Stop the numeric warning for eq_name and namespace method.
+2.10 Fri Sep 25 18:36:46 EDT 1998
+	- Uses expat Version 19980924
+	  (with local patch - see Expat/expat/xmlparse/xmlparse.c.diff)
+	- Use newSVpvn when PERL_VERSION >= 5.005
+	- Completed xmlfilter
+	- Added support for namespace processing:
+	    o  Namespaces option to XML::Parser and XML::Parser::Expat
+	    o  Two new methods in Expat:
+		namespace - to return namespace associated with name
+		eq_name   - compare 2 names for equality across namespaces.
+	- Use expat's new SetDefaultHandlerExpand instead of SetDefaultHandler
+	  so that entity expansion may continue even if the default handler
+	  is set.
+	- Moved test.pl back up main level and changed to work with XML::Parser
+	- Added tests for namespaces
+2.09 Fri Sep 18 10:33:38 EDT 1998
+	- Fixed errors that caused -w to fret in XML::Parser.
+	- Fixed depth method in XML::Parser::Expat
+	- There were a few places in Expat.xs where garbage strings may
+	  have been returned due to the expat library giving us zero-length
+	  strings. Fixed by using a local version of newSVpv where length
+	  means length, even when zero.
+	- The default handler setter in Expat.xs, was inappropriately setting
+	  cbv->dflt_sv when there was a null handler.
+2.08 Thu Sep 17 11:47:13 EDT 1998
+	- Make XML::Parser higher-level re-usable parser objects. Old object
+	  now becomes XML::Parser::Expat.
+	- The XML::Parser object now supports the style mechanism very close
+	  to that in the 1.0 version.
+2.07 Wed Sep  9 11:03:43 EDT 1998
+	- Added some samples (xmlcomments & xmlstats)
+	- Now requires 5.004 (due to sv_catpvf)
+	- Changed Makefile.PL to allow automatic manification
+	- Added a test that reads xml spec (to check buffer boundary errors)
+2.06 Tue Sep  1 10:40:41 EDT 1998
+	- Fixed the methods current_line, current_byte, and current_column
+	- Added some tests
+2.05 Mon Aug 31 15:29:42 EDT 1998
+	- Made Makefile.PL changes suggested by Murray Nesbitt
+	  <murray@ActiveState.com> to support building on Win32
+	  and for making PPM binaries.
+	- Added method parse
+	- Changed parsestring and parsefile to use new parse method
+	- Deprecated parsestring method
+	- Improved error handling in the ExternEnt handler
+2.04 Wed Aug 26 13:25:01 EDT 1998
+	- Uses expat Version 1.0 of August 14, 1998
+	- Some document changes
+	- Changed dist section in Makefile.PL
+	- Added ExternEnt handler
+	- Added tests for ExternEnt
+2.03 Fri Aug 21 17:19:26 EDT 1998
+	- Changed InitEncoding to ProtocolEncoding. Default to none.
+	  Pass null string to expat's ParserCreate when there is no
+	  ProtocolEncoding.
+	- Fixed bug in parsefile & parsestring where they were referring
+	  to an ErrorContext *method* instead of a field.
+	- Fixed position_in_context bugs:
+		-- 'last' in do {} while ();
+		-- insert newline before pointer when no following newline
+		   in buffer.
+	- Added some additional tests
+2.02 Thu Aug 20 14:05:08 EDT 1998
+	- Fixed parsefile problem reported by
+	  "Robert Hanson" <robertha@zenweb.com>, using a modification of
+	  his suggested fix.
+	- Responded to problem reported by
+	  Bart Schuller <schuller+perl-xml@lunatech.com>
+	  by pre-expanding parts of the XML_UPD macro to avoid confusing
+	  some versions of gcc.
+	- Changed the constructor to take the option InitEncoding, which
+	  gets passed to the ParserCreate call. When not given, defaults
+	  to UTF-8.
+	- Added method position_in_context
+	- Added Constructor option ErrorContext and added reporting of
+	  errors in context.
+2.01 Wed Aug 19 11:42:42 EDT 1998
+	- Added methods:
+		default_current, base, current_line, current_column,
+		current_byte, context
+	- Added some tests
+	- parsestring and parsefile now croak if they're re-used
+	- Filled in some documentation
+2.00 Mon Aug 17 12:01:33 EDT 1998
+	- repackaged with James Clark's most recent expat
+	- changed to an API closer to expat
+1.00 March 1998 
+	- Larry Wall's original version
