@@ -13,7 +13,7 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.21" ;
+$VERSION = "2.22" ;
 $Attdef_Flag = 1 << 30;
 
 my $namespace_mask = $Attdef_Flag - 1;
@@ -335,6 +335,9 @@ sub position_in_context {
   my ($self, $lines) = @_;
   my $parser = $self->{Parser};
   my ($string, $linepos) = PositionContext($parser, $lines);
+
+  return '' unless defined($string);
+
   my $col = GetCurrentColumnNumber($parser);
   my $ptr = ('=' x ($col - 1)) . '^' . "\n";
   my $ret;
@@ -428,6 +431,89 @@ sub parsefile {
   my $ret = $self->parse(*FILE);
   close(FILE);
   $ret;
+}
+
+################################################################
+package XML::Parser::ExpatNB;
+
+use vars qw(@ISA);
+use Carp;
+
+@ISA = qw(XML::Parser::Expat);
+
+sub new {
+  my ($class, %args) = @_;
+
+  my $self = $class->SUPER::new(%args);
+
+  delete $self->{ErrorContext};
+  $self;
+}
+
+sub parse {
+  my $self = shift;
+  my $class = ref($self);
+  croak "parse method not supported in $class";
+}
+
+sub parsestring {
+  my $self = shift;
+  my $class = ref($self);
+  croak "parsestring method not supported in $class";
+}
+
+sub parsefile {
+  my $self = shift;
+  my $class = ref($self);
+  croak "parsefile method not supported in $class";
+}
+
+sub position_in_context {
+  my $self = shift;
+  my $class = ref($self);
+  croak "position_in_context method not supported in $class";
+}
+
+sub original_string {
+  my $self = shift;
+  my $class = ref($self);
+  croak "original_string method not supported in $class";
+}
+
+sub parse_more {
+  my ($self, $data) = @_;
+
+  my $ret = XML::Parser::Expat::ParsePartial($self->{Parser}, $data);
+
+  croak $self->{ErrorMessage} unless $ret;
+}
+
+sub parse_done {
+  my $self = shift;
+
+  my $ret = XML::Parser::Expat::ParseDone($self->{Parser});
+  unless ($ret) {
+    my $msg = $self->{ErrorMessage};
+    $self->release;
+    croak $msg;
+  }
+
+  my $result = $ret;
+  my @result = ();
+  my $final = $self->{FinalHandler};
+  if (defined $final) {
+    if (wantarray) {
+      @result = &$final($self);
+    }
+    else {
+      $result = &$final($self);
+    }
+  }
+
+  $self->release;
+
+  return unless defined wantarray;
+  return wantarray ? @result : $result;
 }
 
 ################################################################
@@ -843,7 +929,7 @@ This method is deprecated in favor of the parse method.
 Parses the XML document in the given file. Will die if parsestring or
 parsefile has been called previously for this instance.
 
-= item is_defaulted(ATTNAME)
+=item is_defaulted(ATTNAME)
 
 When passed an attribute name received through the start handler, returns
 true if the attribute was supplied as a default.
@@ -853,6 +939,26 @@ true if the attribute was supplied as a default.
 Unsets all handlers (including internal ones that set context), but expat
 continues parsing to the end of the document or until it finds an error.
 It should finish up a lot faster than with the handlers set.
+
+=back
+
+=head2 XML::Parser::ExpatNB Methods
+
+The class XML::Parser::ExpatNB is a subclass of XML::Parser::Expat used
+for non-blocking access to the expat library. The Expat methods
+position_in_context and original_string are disabled for this class and
+it doesn't honor the ErrorContext option. It has the following additional
+methods:
+
+=over 4
+
+=item parse_more(DATA)
+
+Feed expat more text to munch on.
+
+=item parse_done
+
+Tell expat that it's gotten the whole document.
 
 =back
 

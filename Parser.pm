@@ -14,7 +14,7 @@ use Carp;
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.21';
+  $VERSION = '2.22';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
 }
@@ -102,6 +102,32 @@ sub setHandlers {
     $self->{Handlers}->{$type} = $handler;
   }
 }				# End of setHandlers
+
+sub parse_start {
+  my $self = shift;
+  my @expat_options = ();
+
+  my ($key, $val);
+  while (($key, $val) = each %{$self}) {
+    push (@expat_options, $key, $val)
+      unless exists $self->{Non_Expat_Options}->{$key};
+  }
+
+  my %handlers = %{$self->{Handlers}};
+  my $init = delete $handlers{Init};
+  my $final = delete $handlers{Final};
+
+  my $expatnb = new XML::Parser::ExpatNB(@expat_options, @_);
+  $expatnb->setHandlers(%handlers);
+
+  &$init($expatnb)
+    if defined($init);
+
+  $expatnb->{FinalHandler} = $final
+    if defined($final);
+
+  return $expatnb;
+}
 
 sub parse {
   my $self = shift;
@@ -648,6 +674,22 @@ This is just an alias for parse for backwards compatibility.
 Open FILE for reading, then call parse with the open handle. The file
 is closed no matter how parse returns. Returns what parse returns.
 
+=item parse_start([ OPT => OPT_VALUE [...]])
+
+Create and return a new instance of XML::Parser::ExpatNB. Constructor
+options may be provided. If an init handler has been provided, it is
+called before returning the ExpatNB object. Documents are parsed by
+making incremental calls to the parse_more method of this object, which
+takes a string. A single call to the parse_done method of this object,
+which takes no arguments, indicates that the document is finished.
+
+If there is a final handler installed, it is executed by the parse_done
+method before returning and the parse_done method returns whatever is
+returned by the final handler.
+
+ExpatNB objects do not handle the position_in_context or original_string
+methods and they do not honor the ErrorContext option.
+
 =back
 
 =head1 HANDLERS
@@ -820,20 +862,30 @@ Nothing special is returned by parse.
 
 =head2 Tree
 
-Parse will return a tree structured as the document is. So for example
-the result of parsing:
+Parse will return a parse tree for the document. Each node in the tree
+takes the form of a tag, content pair. Text nodes are represented with
+a pseudo-tag of "0" and the string that is their content. For elements,
+the content is an array reference. The first item in the array is a
+(possibly empty) hash reference containing attributes. The remainder of
+the array is a sequence of tag-content pairs representing the content
+of the element.
 
-  <foo><head id="a">Hello</head><bar>There<ref/></bar>All</foo>
+So for example the result of parsing:
+
+  <foo><head id="a">Hello <em>there</em></head><bar>Howdy<ref/></bar>do</foo>
 
 would be:
-
-  [foo, [{}, head, [{id => "a"}, 0, Hello],
-	 bar, [{}, 0, There,
-	       ref, [{}]
-	      ],
-	 0, All
+             Tag   Content
+  ==================================================================
+  [foo, [{}, head, [{id => "a"}, 0, "Hello ",  em, [{}, 0, "there"]],
+	      bar, [         {}, 0, "Howdy",  ref, [{}]],
+	        0, "do"
 	]
   ]
+
+The root document "foo", has 3 children: a "head" element, a "bar"
+element and the text "do". After the empty attribute hash, these are
+represented in it's contents by 3 tag-content pairs.
 
 =head2 Objects
 

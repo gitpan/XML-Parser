@@ -76,7 +76,10 @@ typedef struct {
   SV* self_sv;
   XML_Parser p;
 
+  AV* context;
   AV* new_prefix_list;
+  HV *nstab;
+  AV *nslst;
 
   unsigned int st_serial;
   unsigned int st_serial_stackptr;
@@ -90,6 +93,7 @@ typedef struct {
   int prev_offset;
   char * delim;
   STRLEN delimlen;
+
   unsigned ns:1;
   unsigned no_expand:1;
 
@@ -277,8 +281,8 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
 
   cbv = (CallbackVector*) XML_GetUserData(parser);
 
-  ENTER ;
-  SAVETMPS ;
+  ENTER;
+  SAVETMPS;
 
   if (cbv->delim) {
     int cnt;
@@ -320,26 +324,38 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
     tsiz = newSViv(BUFSIZE);
   }
 
-  for (cbv->offset = 0, cbv->prev_offset = 0; ! done;
-       cbv->prev_offset = cbv->offset)
+  for (cbv->offset = 0, cbv->prev_offset = 0; ! done;)
     {
       int	bufleft;
 
+      SAVETMPS;
+
       if (buff) {
-	cbv->offset = XML_GetCurrentByteIndex(parser);
-	leftover += br - (cbv->offset - cbv->prev_offset);
-	if (leftover < 0 || leftover >= BUFSIZE)
-	  croak("parse_stream: bug in parse position calculation");
-	bufleft = BUFSIZE - leftover;
-	Move(&buffer[bufleft], buffer, leftover, char);
+	if (cbv->bufflen > (BUFSIZE >> 1)) {
+	  int diff;
+
+	  cbv->prev_offset = cbv->offset;
+	  cbv->offset = XML_GetCurrentByteIndex(parser);
+	  diff = cbv->offset - cbv->prev_offset;
+	  leftover = cbv->bufflen - diff;
+	  if (leftover < 0 || leftover >= BUFSIZE)
+	    croak("parse_stream: bug in parse position calculation");
+	  bufleft = BUFSIZE - leftover;
+	  Move(&buffer[diff], buffer, leftover, char);
+	}
+	else {
+	  leftover = cbv->bufflen;
+	  bufleft = BUFSIZE;
+	}
 	buff = &buffer[leftover];
+	*buff = '\0';
       }
       else {
 	leftover = 0;
 	buff = buffer;
 	bufleft = BUFSIZE;
       }
-      
+
       if (cbv->delim) {
 	br = lblen > bufleft ? bufleft : lblen;
 	if (br)
@@ -382,7 +398,6 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
       }
 
       if (br == 0) {
-	cbv->offset = cbv->prev_offset;
 	done = 1;
       }
       else {
@@ -394,6 +409,8 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
 
       if (! ret)
 	break;
+
+      FREETMPS;
     }
 
   if (! ret)
@@ -411,21 +428,21 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
     SvREFCNT_dec(tbuff);
   }
       
-  FREETMPS ;
-  LEAVE ;
+  FREETMPS;
+  LEAVE;
 
   return ret;
 }  /* End parse_stream */
 
 static SV *
-gen_ns_name(const char * name, SV * ns_table, SV * ns_list)
+gen_ns_name(const char * name, HV * ns_table, AV * ns_list)
 {
   char	*pos = strchr(name, NSDELIM);
   SV * ret;
 
   if (pos && pos > name)
     {
-      SV ** name_ent = hv_fetch((HV*)SvRV(ns_table), (char *) name,
+      SV ** name_ent = hv_fetch(ns_table, (char *) name,
 				pos - name, TRUE);
       ret = newSVpv(&pos[1], 0);
 
@@ -439,9 +456,8 @@ gen_ns_name(const char * name, SV * ns_table, SV * ns_list)
 	    }
 	  else
 	    {
-	      av_push((AV*)SvRV(ns_list),
-		      newSVpv((char *) name, pos - name));
-	      index = av_len((AV*) SvRV(ns_list));
+	      av_push(ns_list,  newSVpv((char *) name, pos - name));
+	      index = av_len(ns_list);
 	      sv_setiv(*name_ent, (IV) index);
 	    }
 
@@ -1016,11 +1032,18 @@ characterData(void *userData, const char *s, int len)
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
 
+  ENTER;
+  SAVETMPS;
+
   PUSHMARK(sp);
-  XPUSHs(cbv->self_sv);
-  XPUSHs(sv_2mortal(mynewSVpv((char*)s,len)));
+  EXTEND(sp, 2);
+  PUSHs(cbv->self_sv);
+  PUSHs(sv_2mortal(mynewSVpv((char*)s,len)));
   PUTBACK;
   perl_call_sv(cbv->char_sv, G_DISCARD);
+
+  FREETMPS;
+  LEAVE;
 }  /* End characterData */
 
 static void
@@ -1032,7 +1055,7 @@ startElement(void *userData, const char *name, const char **atts)
   unsigned   do_ns = cbv->ns;
   SV ** pnstab;
   SV ** pnslst;
-  SV *  elname = (SV *) 0;
+  SV *  elname;
 
   if (! cbv->start_seen) {
     /* All of the local handlers deal with stuff in the prolog,
@@ -1046,34 +1069,29 @@ startElement(void *userData, const char *name, const char **atts)
   }
     
   if (do_ns)
-    {
-      pnstab = hv_fetch((HV*)SvRV(cbv->self_sv), "Namespace_Table",
-			15, FALSE);
-      pnslst = hv_fetch((HV*)SvRV(cbv->self_sv), "Namespace_List",
-			14, FALSE);
-      
-      do_ns = (pnstab
-	       && SvROK(*pnstab) && SvTYPE(SvRV(*pnstab)) == SVt_PVHV
-	       && pnslst
-	       && SvROK(*pnslst) && SvTYPE(SvRV(*pnslst)) == SVt_PVAV);
-
-      if (do_ns)
-	elname = gen_ns_name(name, *pnstab, *pnslst);
-    }
-
-  if (! elname)
+    elname = gen_ns_name(name, cbv->nstab, cbv->nslst);
+  else
     elname = newSVpv((char *)name, 0);
 
   if (SvTRUE(cbv->start_sv))
     {
+      const char **attlim = atts;
+
+      while (*attlim)
+	attlim++;
+
+      ENTER;
+      SAVETMPS;
+
       PUSHMARK(sp);
-      XPUSHs(cbv->self_sv);
-      XPUSHs(elname);
+      EXTEND(sp, attlim - atts + 2);
+      PUSHs(cbv->self_sv);
+      PUSHs(elname);
       while (*atts)
 	{
 	  SV * attname;
 
-	  attname = (do_ns ? gen_ns_name(*atts, *pnstab, *pnslst)
+	  attname = (do_ns ? gen_ns_name(*atts, cbv->nstab, cbv->nslst)
 		     : newSVpv((char *) *atts, 0));
 	    
 	  if ((*atts)[-1] & 4) {
@@ -1089,21 +1107,18 @@ startElement(void *userData, const char *name, const char **atts)
 	  }
 
 	  atts++;
-	  XPUSHs(sv_2mortal(attname));
+	  PUSHs(sv_2mortal(attname));
 	  if (*atts)
-	    XPUSHs(sv_2mortal(newSVpv((char*)*atts++,0)));
+	    PUSHs(sv_2mortal(newSVpv((char*)*atts++,0)));
 	}
       PUTBACK;
       perl_call_sv(cbv->start_sv, G_DISCARD);
+
+      FREETMPS;
+      LEAVE;
     }
 
-  pcontext = hv_fetch((HV*)SvRV(cbv->self_sv), "Context", 7, 0);
-  if (pcontext && SvROK(*pcontext) && SvTYPE(SvRV(*pcontext)) == SVt_PVAV)
-    {
-      av_push((AV*)SvRV(*pcontext), elname);
-    }
-  else
-    SvREFCNT_dec(elname);
+  av_push(cbv->context, elname);
 
   if (cbv->st_serial_stackptr >= cbv->st_serial_stacksize) {
     unsigned int newsize = cbv->st_serial_stacksize + 512;
@@ -1124,15 +1139,9 @@ endElement(void *userData, const char *name)
 {
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
-  SV ** pcontext = hv_fetch((HV*)SvRV(cbv->self_sv), "Context", 7, 0);
-  SV *elname = (SV *) 0;
+  SV *elname;
 
-  if (pcontext && SvROK(*pcontext) && SvTYPE(SvRV(*pcontext)) == SVt_PVAV)
-    {
-      elname = av_pop((AV*) SvRV(*pcontext));
-    }
-  else
-    elname = newSVpv((char *) name, 0);
+  elname = av_pop(cbv->context);
   
   if (! cbv->st_serial_stackptr) {
     croak("endElement: Start tag serial number stack underflow");
@@ -1142,11 +1151,18 @@ endElement(void *userData, const char *name)
 
   if (SvTRUE(cbv->end_sv))
     {
+      ENTER;
+      SAVETMPS;
+
       PUSHMARK(sp);
-      XPUSHs(cbv->self_sv);
-      XPUSHs(elname);
+      EXTEND(sp, 2);
+      PUSHs(cbv->self_sv);
+      PUSHs(elname);
       PUTBACK;
       perl_call_sv(cbv->end_sv, G_DISCARD);
+
+      FREETMPS;
+      LEAVE;
     }
 
   SvREFCNT_dec(elname);
@@ -1158,12 +1174,19 @@ processingInstruction(void *userData, const char *target, const char *data)
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
 
+  ENTER;
+  SAVETMPS;
+
   PUSHMARK(sp);
-  XPUSHs(cbv->self_sv);
-  XPUSHs(sv_2mortal(newSVpv((char*)target,0)));
-  XPUSHs(sv_2mortal(newSVpv((char*)data,0)));
+  EXTEND(sp, 3);
+  PUSHs(cbv->self_sv);
+  PUSHs(sv_2mortal(newSVpv((char*)target,0)));
+  PUSHs(sv_2mortal(newSVpv((char*)data,0)));
   PUTBACK;
   perl_call_sv(cbv->proc_sv, G_DISCARD);
+
+  FREETMPS;
+  LEAVE;
 }  /* End processingInstruction */
 
 static void
@@ -1172,11 +1195,18 @@ commenthandle(void *userData, const char *string)
   dSP;
   CallbackVector * cbv = (CallbackVector*) userData;
 
-  PUSHMARK(SP);
-  XPUSHs(cbv->self_sv);
-  XPUSHs(sv_2mortal(newSVpv((char*) string, 0)));
+  ENTER;
+  SAVETMPS;
+
+  PUSHMARK(sp);
+  EXTEND(sp, 2);
+  PUSHs(cbv->self_sv);
+  PUSHs(sv_2mortal(newSVpv((char*) string, 0)));
   PUTBACK;
   perl_call_sv(cbv->cmnt_sv, G_DISCARD);
+
+  FREETMPS;
+  LEAVE;
 }  /* End commenthandler */
 
 static void
@@ -1186,10 +1216,16 @@ startCdata(void *userData)
   CallbackVector* cbv = (CallbackVector*) userData;
 
   if (cbv->startcd_sv) {
+    ENTER;
+    SAVETMPS;
+
     PUSHMARK(sp);
     XPUSHs(cbv->self_sv);
     PUTBACK;
     perl_call_sv(cbv->startcd_sv, G_DISCARD);
+
+    FREETMPS;
+    LEAVE;
   }
 }  /* End startCdata */
 
@@ -1200,10 +1236,16 @@ endCdata(void *userData)
   CallbackVector* cbv = (CallbackVector*) userData;
 
   if (cbv->endcd_sv) {
+    ENTER;
+    SAVETMPS;
+
     PUSHMARK(sp);
     XPUSHs(cbv->self_sv);
     PUTBACK;
     perl_call_sv(cbv->endcd_sv, G_DISCARD);
+
+    FREETMPS;
+    LEAVE;
   }
 }  /* End endCdata */
 
@@ -1212,12 +1254,19 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
   dSP;
   CallbackVector* cbv = (CallbackVector*) userdata;
 
+  ENTER;
+  SAVETMPS;
+
   PUSHMARK(sp);
-  XPUSHs(cbv->self_sv);
-  XPUSHs(prefix ? sv_2mortal(newSVpv((char *)prefix, 0)) : &PL_sv_undef);
-  XPUSHs(uri ? sv_2mortal(newSVpv((char *)uri, 0)) : &PL_sv_undef);
+  EXTEND(sp, 3);
+  PUSHs(cbv->self_sv);
+  PUSHs(prefix ? sv_2mortal(newSVpv((char *)prefix, 0)) : &PL_sv_undef);
+  PUSHs(uri ? sv_2mortal(newSVpv((char *)uri, 0)) : &PL_sv_undef);
   PUTBACK;
   perl_call_method("NamespaceStart", G_DISCARD);
+
+  FREETMPS;
+  LEAVE;
 }  /* End nsStart */
 
 static void
@@ -1225,11 +1274,18 @@ nsEnd(void *userdata, const XML_Char *prefix) {
   dSP;
   CallbackVector* cbv = (CallbackVector*) userdata;
 
+  ENTER;
+  SAVETMPS;
+
   PUSHMARK(sp);
-  XPUSHs(cbv->self_sv);
-  XPUSHs(prefix ? sv_2mortal(newSVpv((char *)prefix, 0)) : &PL_sv_undef);
+  EXTEND(sp, 2);
+  PUSHs(cbv->self_sv);
+  PUSHs(prefix ? sv_2mortal(newSVpv((char *)prefix, 0)) : &PL_sv_undef);
   PUTBACK;
   perl_call_method("NamespaceEnd", G_DISCARD);
+
+  FREETMPS;
+  LEAVE;
 }  /* End nsEnd */
 
 static void
@@ -1246,11 +1302,18 @@ defaulthandle(void *userData, const char *string, int len)
   if (! cbv->dflt_sv)
     return;
 
-  PUSHMARK(SP);
-  XPUSHs(cbv->self_sv);
-  XPUSHs(sv_2mortal(mynewSVpv((char*)string, len)));
+  ENTER;
+  SAVETMPS;
+
+  PUSHMARK(sp);
+  EXTEND(sp, 2);
+  PUSHs(cbv->self_sv);
+  PUSHs(sv_2mortal(mynewSVpv((char*)string, len)));
   PUTBACK;
   perl_call_sv(cbv->dflt_sv, G_DISCARD);
+
+  FREETMPS;
+  LEAVE;
 }  /* End defaulthandle */
 
 static void
@@ -1264,15 +1327,22 @@ unparsedEntityDecl(void *userData,
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
 
+  ENTER;
+  SAVETMPS;
+
   PUSHMARK(sp);
-  XPUSHs(cbv->self_sv);
-  XPUSHs(sv_2mortal(newSVpv((char*) entity, 0)));
-  XPUSHs(base ? sv_2mortal(newSVpv((char*) base, 0)) : &PL_sv_undef);
-  XPUSHs(sv_2mortal(newSVpv((char*) sysid, 0)));
-  XPUSHs(pubid ? sv_2mortal(newSVpv((char*) pubid, 0)) : &PL_sv_undef);
-  XPUSHs(sv_2mortal(newSVpv((char*) notation, 0)));
+  EXTEND(sp, 6);
+  PUSHs(cbv->self_sv);
+  PUSHs(sv_2mortal(newSVpv((char*) entity, 0)));
+  PUSHs(base ? sv_2mortal(newSVpv((char*) base, 0)) : &PL_sv_undef);
+  PUSHs(sv_2mortal(newSVpv((char*) sysid, 0)));
+  PUSHs(pubid ? sv_2mortal(newSVpv((char*) pubid, 0)) : &PL_sv_undef);
+  PUSHs(sv_2mortal(newSVpv((char*) notation, 0)));
   PUTBACK;
   perl_call_sv(cbv->unprsd_sv, G_DISCARD);
+
+  FREETMPS;
+  LEAVE;
 }  /* End unparsedEntityDecl */
 
 static void
@@ -1331,11 +1401,12 @@ externalEntityRef(XML_Parser parser,
   ENTER ;
   SAVETMPS ;
   PUSHMARK(sp);
-  XPUSHs(cbv->self_sv);
-  XPUSHs(base ? sv_2mortal(newSVpv((char*) base, 0)) : &PL_sv_undef);
-  XPUSHs(sv_2mortal(newSVpv((char*) sysid, 0)));
+  EXTEND(sp, pubid ? 4 : 3);
+  PUSHs(cbv->self_sv);
+  PUSHs(base ? sv_2mortal(newSVpv((char*) base, 0)) : &PL_sv_undef);
+  PUSHs(sv_2mortal(newSVpv((char*) sysid, 0)));
   if (pubid)
-    XPUSHs(sv_2mortal(newSVpv((char*) pubid, 0)));
+    PUSHs(sv_2mortal(newSVpv((char*) pubid, 0)));
   PUTBACK ;
   count = perl_call_sv(cbv->extent_sv, G_SCALAR);
 
@@ -1582,7 +1653,7 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 	{
 	  CallbackVector *cbv;
 	  char *enc = (char *) (SvTRUE(enc_sv) ? SvPV(enc_sv,PL_na) : 0);
-	  SV ** noexp;
+	  SV ** spp;
 
 	  if (! AttDefaultFlag) {
 	    SV * adf = perl_get_sv("XML::Parser::Expat::Attdef_Flag", 0);
@@ -1592,22 +1663,38 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 	  Newz(320, cbv, 1, CallbackVector);
 	  cbv->self_sv = SvREFCNT_inc(self_sv);
 	  Newz(325, cbv->st_serial_stack, 1024, unsigned int);
-	  noexp = hv_fetch((HV*)SvRV(cbv->self_sv), "NoExpand", 8, 0);
-	  if (noexp && SvTRUE(*noexp))
+	  spp = hv_fetch((HV*)SvRV(cbv->self_sv), "NoExpand", 8, 0);
+	  if (spp && SvTRUE(*spp))
 	    cbv->no_expand = 1;
 
-	  cbv->ns = (unsigned) namespaces;
+	  spp = hv_fetch((HV*)SvRV(cbv->self_sv), "Context", 7, 0);
+	  if (! spp || ! *spp || !SvROK(*spp))
+	    croak("XML::Parser instance missing Context");
 
+	  cbv->context = (AV*) SvRV(*spp);
+	  
+	  cbv->ns = (unsigned) namespaces;
 	  if (namespaces)
 	    {
-	      SV **npl;
+	      spp = hv_fetch((HV*)SvRV(cbv->self_sv), "New_Prefixes", 12, 0);
+	      if (! spp || ! *spp || !SvROK(*spp))
+	        croak("XML::Parser instance missing New_Prefixes");
 
-	      npl = hv_fetch((HV*)SvRV(cbv->self_sv), "New_Prefixes", 12, 0);
+	      cbv->new_prefix_list = (AV *) SvRV(*spp);
 
-	      if (! npl || ! *npl || !SvROK(*npl))
-	        croak("XML::Parser instance missing New_Prefixes attribute");
+	      spp = hv_fetch((HV*)SvRV(cbv->self_sv), "Namespace_Table",
+			     15, FALSE);
+	      if (! spp || ! *spp || !SvROK(*spp))
+	        croak("XML::Parser instance missing Namespace_Table");
 
-	      cbv->new_prefix_list = (AV *) SvRV(*npl);
+	      cbv->nstab = (HV *) SvRV(*spp);
+
+	      spp = hv_fetch((HV*)SvRV(cbv->self_sv), "Namespace_List",
+			     14, FALSE);
+	      if (! spp || ! *spp || !SvROK(*spp))
+	        croak("XML::Parser instance missing Namespace_List");
+
+	      cbv->nslst = (AV *) SvRV(*spp);
 
 	      RETVAL = XML_ParserCreateNS(enc, NSDELIM);
 	      XML_SetNamespaceDeclHandler(RETVAL,nsStart, nsEnd);
@@ -1749,6 +1836,37 @@ XML_ParseStream(parser, ioref, delim)
 	  }
 	      
 	  RETVAL = parse_stream(parser, ioref, 0);
+	}
+
+    OUTPUT:
+	RETVAL
+
+int
+XML_ParsePartial(parser, s)
+	XML_Parser			parser
+	char *				s
+	int				len = PL_na;
+    CODE:
+	{
+	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+
+	  RETVAL = XML_Parse(parser, s, len, 0);
+	  if (! RETVAL)
+	    append_error(parser, NULL);
+	}
+
+    OUTPUT:
+	RETVAL
+
+
+int
+XML_ParseDone(parser)
+	XML_Parser			parser
+    CODE:
+	{
+	  RETVAL = XML_Parse(parser, "", 0, 1);
+	  if (! RETVAL)
+	    append_error(parser, NULL);
 	}
 
     OUTPUT:
@@ -2018,6 +2136,8 @@ XML_PositionContext(parser, lines)
 	int parsepos = XML_GetCurrentByteIndex(parser) - 1;
 
     PPCODE:
+	  if (! pos)
+            return;
           parsepos -= cbv->offset;
 	  if (parsepos < 0)
 	    parsepos = 0;
@@ -2094,7 +2214,7 @@ GenerateNSName(name, namespace, table, list)
 	    *bp++ = *nmstr++;
 	  *bp = '\0';
 
-	  RETVAL = gen_ns_name(buff, table, list);
+	  RETVAL = gen_ns_name(buff, (HV *) SvRV(table), (AV *) SvRV(list));
 	  Safefree(buff);
 	}	
     OUTPUT:
@@ -2109,7 +2229,8 @@ XML_DefaultCurrent(parser)
 
 	  if (cbv->dflags & INST_DFL) {
 	    if (cbv->in_local_hndlr) {
-	      PUSHMARK(SP);
+	      PUSHMARK(sp);
+	      EXTEND(sp, 2);
 	      XPUSHs(cbv->self_sv);
 	      XPUSHs(sv_2mortal(mynewSVpv(cbv->doctype_buffer
 					  + cbv->dtb_offset,
@@ -2287,19 +2408,25 @@ XML_OriginalString(parser)
 	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 	  long parsepos, parselim;
 
-	  parsepos = XML_GetCurrentByteIndex(parser);
-	  parselim = XML_GetCurrentByteLimit(parser);
+	  if (cbv->buffstrt) {
+	    
+	    parsepos = XML_GetCurrentByteIndex(parser);
+	    parselim = XML_GetCurrentByteLimit(parser);
 
-	  if (parsepos > parselim)
-	    croak("OriginalString: Parse position > Parse limit");
+	    if (parsepos > parselim)
+	      croak("OriginalString: Parse position > Parse limit");
 
-	  parsepos -= cbv->offset;
-	  parselim -= cbv->offset;
+	    parsepos -= cbv->offset;
+	    parselim -= cbv->offset;
 
-	  if (parsepos < 0 || parselim > cbv->bufflen)
-	    croak("OriginalString: Part of string is outside buffer");
+	    if (parsepos < 0 || parselim > cbv->bufflen)
+	      croak("OriginalString: Part of string is outside buffer");
 
-	  RETVAL = mynewSVpv(&cbv->buffstrt[parsepos], parselim - parsepos);
+	    RETVAL = mynewSVpv(&cbv->buffstrt[parsepos], parselim - parsepos);
+	  }
+	  else {
+	    RETVAL = newSVpv("", 0);
+	  }
 	}
     OUTPUT:
 	RETVAL

@@ -5,7 +5,7 @@ $loaded = 1;
 print "ok 1\n";
 
 my $delim = '------------123453As23lkjlklz877';
-my $file = ':samples:REC-xml-19980210.xml';
+my $file = 'samples/REC-xml-19980210.xml';
 my $tmpfile = 'stream.tmp';
 
 my $cnt = 0;

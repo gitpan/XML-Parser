@@ -1,5 +1,23 @@
 Revision history for Perl extension XML::Parser.
 
+2.22 Sun Apr  4 11:47:25 EDT 1999
+	- Loic Dachary <loic@ceic.com> reported a core dump with a small
+	  file with a comment that wasn't properly closed. Fixed in expat
+	  by updating positionPtr properly in final call of XML_Parse.
+	  (Reported to & acknowledged by James Clark.)
+	- Made more fixes to Expat.xs position calculation.
+	- Loic Dachary <loic@ceic.com> provided patches for fixing a
+	  memory growth problem with large documents. (Garbage collection
+	  wasn't happening frequently enough.)
+	- As suggested by Gabe Beged-Dov <begeddov@jfinity.com>, added
+	  a non-blocking parse mechanism:
+		- Added parse_start method to XML::Parser, which returns a
+		  XML::Parser::ExpatNB object.
+		- Added XML::Parser::ExpatNB class, which is a subclass of
+		  Expat and has the additional methods parse_more & parse_done
+	- Made some performance tweaks as suggested by performance thread
+	  on perl-xml discussion list. [With negligible results]
+	- Tried to clarify Tree style structure in Parser pod
 2.21 Sun Mar 21 17:42:04 EST 1999
 	- Warren Vik <wvik@whitebarn.com> provided patches for a bug
 	  introduced with the is_defaulted method. It manifested itself

@@ -1,8 +1,18 @@
 *** expat/xmlparse/xmlparse.c.orig	Sun Mar  7 10:33:46 1999
---- expat/xmlparse/xmlparse.c	Sat Mar 13 14:23:36 1999
+--- expat/xmlparse/xmlparse.c	Thu Mar 25 07:46:20 1999
+***************
+*** 730,735 ****
+--- 730,736 ----
+    if (len == 0) {
+      if (!isFinal)
+        return 1;
++     positionPtr = bufferPtr;
+      errorCode = processor(parser, bufferPtr, parseEndPtr = bufferEnd, 0);
+      if (errorCode == XML_ERROR_NONE)
+        return 1;
 ***************
 *** 837,842 ****
---- 837,849 ----
+--- 838,850 ----
     return errorCode;
   }
   
@@ -27,7 +37,7 @@
   	    int bufSize = tag->rawNameLength * 4;
   	    bufSize = ROUND_UP(bufSize, sizeof(XML_Char));
   	    tag->buf = realloc(tag->buf, bufSize);
---- 1187,1198 ----
+--- 1188,1199 ----
   	tag->rawName = s + enc->minBytesPerChar;
   	tag->rawNameLength = XmlNameLength(enc, tag->rawName);
   	if (nextPtr) {
@@ -42,7 +52,7 @@
   	    tag->buf = realloc(tag->buf, bufSize);
 ***************
 *** 1195,1200 ****
---- 1205,1211 ----
+--- 1206,1212 ----
   	}
   	++tagLevel;
   	if (startElementHandler) {
@@ -52,7 +62,7 @@
   	  for (;;) {
 ***************
 *** 1224,1229 ****
---- 1235,1248 ----
+--- 1236,1249 ----
   	  if (result)
   	    return result;
   	  startElementHandler(handlerArg, tag->name.str, (const XML_Char **)atts);
@@ -77,7 +87,7 @@
   	if (endElementHandler) {
   	  if (startElementHandler)
   	    *eventPP = *eventEndPP;
---- 1274,1291 ----
+--- 1275,1292 ----
   	if (result)
   	  return result;
   	poolFinish(&tempPool);
@@ -112,7 +122,7 @@
   	  appAtts[attIndex++] = da->id->name;
   	  appAtts[attIndex++] = da->value;
   	}
---- 1580,1593 ----
+--- 1581,1594 ----
   	      return XML_ERROR_NO_MEMORY;
   	  }
             else {
@@ -136,7 +146,7 @@
           ATTRIBUTE_ID *id;
           ((XML_Char *)(appAtts[i]))[-1] = 0;
   	id = (ATTRIBUTE_ID *)lookup(&dtd.attributeIds, appAtts[i], 0);
---- 1598,1604 ----
+--- 1599,1605 ----
     i = 0;
     if (nPrefixes) {
       for (; i < attIndex; i += 2) {
@@ -156,7 +166,7 @@
     for (binding = *bindingsPtr; binding; binding = binding->nextTagBinding)
       binding->attId->name[-1] = 0;
     if (elementType->prefix) {
---- 1626,1636 ----
+--- 1627,1637 ----
   	((XML_Char *)(appAtts[i]))[-1] = 0;
       }
     }

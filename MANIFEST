@@ -79,4 +79,5 @@ t/external_ent.t		Test script
 t/file.t			Test script
 t/finish.t			Test script
 t/namespaces.t			Test script
+t/partial.t			Test script
 t/stream.t			Test script
