@@ -8,19 +8,21 @@
 
 package XML::Parser;
 
-use vars qw($VERSION %Built_In_Styles $have_LWP);
 use Carp;
+use IO::File;
+
+use vars qw($VERSION %Built_In_Styles $have_LWP);
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.27';
+  $VERSION = '2.28';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
   eval {
     require 'LWP.pm';
     require 'URI/URL.pm';
   };
-  $have_LWP = not $@;
+  $have_LWP = (defined($INC{'LWP.pm'}) and defined($INC{'URI/URL.pm'}));
   if ($have_LWP) {
     import LWP;
   }
@@ -88,9 +90,14 @@ sub new {
     }
   }
   
-  $handlers->{ExternEnt} ||= ($have_LWP
-			      ? \&lwp_ext_ent_handler
-			      : \&file_ext_ent_handler);
+  if ($have_LWP) {
+    $handlers->{ExternEnt} = \&lwp_ext_ent_handler;
+    $handlers->{ExternEntFin} = \&lwp_ext_ent_cleanup;
+  }
+  else {
+    $handlers->{ExternEnt} = \&file_ext_ent_handler;
+    $handlers->{ExternEntFin} = \&file_ext_ent_cleanup;
+  }
 
   $args{Pkg} ||= caller;
   bless \%args, $class;
@@ -138,6 +145,8 @@ sub parse_start {
   &$init($expatnb)
     if defined($init);
 
+  $expatnb->{_State_} = 1;
+
   $expatnb->{FinalHandler} = $final
     if defined($final);
 
@@ -161,11 +170,23 @@ sub parse {
   
   $expat->setHandlers(%handlers);
   
+  if ($self->{Base}) {
+    $expat->base($self->{Base});
+  }
+
   &$init($expat)
     if defined($init);
   
   my @result = ();
-  my $result = $expat->parse($arg);
+  my $result;
+  eval {
+    $result = $expat->parse($arg);
+  };
+  my $err = $@;
+  if ($err) {
+    $expat->release;
+    die $err;
+  }
   
   if ($result and defined($final)) {
     if (wantarray) {
@@ -195,7 +216,10 @@ sub parsefile {
   binmode(FILE);
   my @ret;
   my $ret;
-  
+
+  $self->{Base} = $file;
+  $self->{Base} =~ s/[^:\/\\]+$//;
+
   if (wantarray) {
     eval {
       @ret = $self->parse(*FILE, @_);
@@ -214,12 +238,9 @@ sub parsefile {
   return wantarray ? @ret : $ret;
 }				# End of parsefile
 
-my %External_Entity_Table = ();
 
 sub file_ext_ent_handler {
-  my ($exp, $base, $sys) = @_;	# We don't use pub id
-
-  local(*ENT);
+  my ($xp, $base, $sys) = @_;	# We don't use pub id
 
   my $name = $sys;
 
@@ -235,7 +256,7 @@ sub file_ext_ent_handler {
     my $method = $1;
 
     unless ($method eq 'file') {
-      $exp->{ErrorMessage}
+      $xp->{ErrorMessage}
 	.= "\nDefault external entity handler only deals with file URLs.";
       return undef;
     }
@@ -243,63 +264,89 @@ sub file_ext_ent_handler {
 
   if ($name =~ /^[|>+]/
       or $name =~ /\|$/) {
-    $exp->{ErrorMessage}
+    $xp->{ErrorMessage}
 	.= "Perl IO controls not permitted in system id";
     return undef;
   }
 
-  my $def = $External_Entity_Table{$name};
-  if (! defined($def)) {
-    unless (open(ENT, $name)) {
-      $exp->{ErrorMessage}
-	.= "Failed to open $name: $!";
-      return undef;
-    }
-    my $status;
-    $status = read(ENT, $def, -s $name);
-    close(ENT);
-
-    unless (defined($status)) {
-      $exp->{ErrorMessage}
-	.= "Error reading $name: $!";
-      return undef;
-    }
-
-    $External_Entity_Table{$name} = $def;
+  my $fh = new IO::File($name);
+  unless (defined $fh) {
+    $xp->{ErrorMessage}
+      .= "Failed to open $name:\n$!";
+    return undef;
   }
 
-  return $def;
+  $xp->{_BaseStack} ||= [];
+  $xp->{_FhStack} ||= [];
+
+  push(@{$xp->{_BaseStack}}, $base);
+  push(@{$xp->{_FhStack}}, $fh);
+
+  my $newbase = $name;
+  $newbase =~ s/[^:\/\\]+$//;
+  $xp->base($newbase);
+  
+  return $fh;
 }  # End file_ext_ent_handler
+
+sub file_ext_ent_cleanup {
+  my ($xp) = @_;
+
+  my $fh = pop(@{$xp->{_FhStack}});
+  $fh->close;
+
+  my $base = pop(@{$xp->{_BaseStack}});
+  $xp->base($base);
+}  # End file_ext_ent_cleanup
 
 ##
 ## Note that this external entity handler reads the entire entity into
 ## memory, so it will choke on huge ones.
 ##
 sub lwp_ext_ent_handler {
-  my ($exp, $base, $sys) = @_;  # We don't use public id
+  my ($xp, $base, $sys) = @_;  # We don't use public id
 
-  my $uri = new URI::URL($sys);
-  if (not $uri->scheme and $base) {
-    $uri = $uri->abs($base);
+  my $name;
+  if (defined $base) {
+    $name = $base . $sys;
+  }
+  else {
+    $name = $sys;
   }
   
+  my $uri = new URI::URL($name);
+  
   my $scheme = $uri->scheme;
-  if (not $scheme or $scheme eq 'file') {
-    return file_ext_ent_handler($exp, $base, $sys);
+
+  if (! $scheme or $scheme eq 'file') {
+    return file_ext_ent_handler($xp, $base, $sys);
   }
 
-  my $ua = ($exp->{_lwpagent} ||= new LWP::UserAgent());
+  my $ua = ($xp->{_lwpagent} ||= new LWP::UserAgent());
 
   my $req = new HTTP::Request('GET', $uri);
 
   my $res = $ua->request($req);
   if ($res->is_error) {
-    $exp->{ErrorMessage} .= "\n" . $res->status_line;
+    $xp->{ErrorMessage} .= "\n" . $res->status_line;
     return undef;
   }
   
+  $xp->{_BaseStack} ||= [];
+  push(@{$xp->{_BaseStack}}, $base);
+
+  my $newbase = $uri->abs;
+  $newbase =~ s/[^:\/\\]+$//;
+  $xp->base($newbase);
+  
   return $res->content;
 }  # End lwp_ext_ent_handler
+
+sub lwp_ext_ent_cleanup {
+  my ($xp) = @_;
+
+  $xp->base(pop(@{$xp->{_BaseStack}}));
+}  # End lwp_ext_ent_cleanup
 
 ###################################################################
 
@@ -330,8 +377,6 @@ sub Proc {
   my $expat = shift;
   my $target = shift;
   my $text = shift;
-  print $expat,"\n";
-  print $expat->{Context}, "\n";
   my @foo = @{$expat->{Context}};
   print STDERR "@foo $target($text)\n";
 }
@@ -838,14 +883,27 @@ the contents of the external entity, or return undef, which indicates the
 external entity couldn't be found and will generate a parse error.
 
 If an open filehandle is returned, it must be returned as either a glob
-(*FOO) or as a reference to a glob (e.g. an instance of IO::Handle). The
-parser will close the filehandle after using it.
+(*FOO) or as a reference to a glob (e.g. an instance of IO::Handle).
 
-A default handler, XML::Parser::default_ext_ent_handler, is installed
-for this. It only handles the file URL method and it assumes "file:" if
-it isn't there. The expat base method can be used to set a basename for
+A default handler is installed for this event. The default handler is
+XML::Parser::lwp_ext_ent_handler if the LWP module is present, otherwise
+XML::Parser::file_ext_ent_handler is the default handler for external
+entities. Please note that the LWP external entity handler reads the entire
+entity into a string an returns it, where as the file handler opens a
+filehandle.
+
+The expat base method can be used to set a basename for
 relative pathnames. If no basename is given, or if the basename is itself
 a relative name, then it is relative to the current working directory.
+
+=head2 ExternEntFin	(Expat)
+
+This is called after parsing an external entity. It's not called unless
+an ExternEnt handler is also set. There is a default handler installed
+that pairs with the default ExternEnt handler.
+
+If you're going to install your own ExternEnt handler, then you should
+set (or unset) this handler too.
 
 =head2 Entity		(Expat, Name, Val, Sysid, Pubid, Ndata)
 
@@ -863,7 +921,9 @@ set, then this handler will not be called for unparsed entities.
 =head2 Element		(Expat, Name, Model)
 
 The element handler is called when an element declaration is found. Name
-is the element name, and Model is the content model as a string.
+is the element name, and Model is the content model as an XML::Parser::Content
+object. See L<XML::Parser::Expat/"XML::Parser::ContentModel Methods">
+for methods available for this class.
 
 =head2 Attlist		(Expat, Elname, Attname, Type, Default, Fixed)
 
@@ -889,6 +949,11 @@ will be there whether or not they have been processed by another handler
 (except for unparsed entities processed by the Unparsed handler). However,
 comments and processing instructions will not appear if they've been processed
 by their respective handlers.
+
+=head2 * DoctypeFin		(Parser)
+
+This handler is called after parsing of the DOCTYPE declaration has finished,
+including any internal or external DTD declarations.
 
 =head2 XMLDecl		(Expat, Version, Encoding, Standalone)
 

@@ -6,7 +6,7 @@
 # Change 1..1 below to 1..last_test_to_print .
 # (It may become useful if the test is moved to ./t subdirectory.)
 
-BEGIN {print "1..24\n";}
+BEGIN {print "1..25\n";}
 END {print "not ok 1\n" unless $loaded;}
 use XML::Parser;
 $loaded = 1;
@@ -20,6 +20,7 @@ print "ok 1\n";
 
 # Test 2
 
+
 my $parser = new XML::Parser(ProtocolEncoding => 'ISO-8859-1');
 if ($parser)
 {
@@ -30,6 +31,9 @@ else
     print "not ok 2\n";
     exit;
 }
+
+my @ndxstack;
+my $indexok = 1;
 
 # Need this external entity
 
@@ -81,6 +85,7 @@ sub st
 {
     my ($p, $el, %atts) = @_;
 
+    $ndxstack[$p->depth] = $p->element_index;
     $tests[6]++ if ($el eq 'bar' and $atts{stomp} eq 'jill');
     if ($el eq 'zap' and $atts{'ref'} eq 'zing')
     {
@@ -95,6 +100,7 @@ sub st
 sub eh
 {
     my ($p, $el) = @_;
+    $indexok = 0 unless $p->element_index == $ndxstack[$p->depth];
     if ($el eq 'zap')
     {
 	$tests[8]++;
@@ -162,7 +168,6 @@ sub extent
     {
 	$tests[16]++;
 
-	local(*FOO);
 	open(FOO, $sys) or die "Couldn't open $sys";
 	return *FOO;
     }
@@ -175,7 +180,9 @@ eval {
 			 'Proc'  => \&pi,
 			 'Notation' => \&note,
 			 'Unparsed' => \&unp,
-			 'ExternEnt' => \&extent);
+			 'ExternEnt' => \&extent,
+			 'ExternEntFin' => sub {close(FOO);}
+			);
 };
 
 if ($@)
@@ -220,3 +227,6 @@ if ($cmpstr ne $pos)
     print "not ";
 }
 print "ok 24\n";
+
+print "not " unless $indexok;
+print "ok 25\n";

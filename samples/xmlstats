@@ -1,8 +1,8 @@
 #!/usr/local/bin/perl -w
 #
-# $Revision: 1.5 $
+# $Revision: 1.6 $
 #
-# $Date: 1998/10/28 04:30:23 $
+# $Date: 2000/03/28 02:28:55 $
 
 package Elinfo;
 

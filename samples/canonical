@@ -6,17 +6,17 @@
 # This program is free software; you can redistribute it and/or
 # modify it under the same terms as Perl itself.
 #
-# $Revision: 1.1 $
+# $Revision: 1.2 $
 #
-# $Date: 1999/09/25 22:27:40 $
+# $Date: 2000/03/28 02:28:54 $
 #
 #	This program take an XML document on the standard input and
 #	generates the corresponding canonical XML document on the
 #	standard output. The definition of "Canonical XML" that I'm
 #	using is taken from the working draft published by W3C on
-#	29-July-1999:
+#	19-Jan-2000:
 #
-#		http://www.w3.org/1999/07/WD-xml-c14n-19990729
+#		http://www.w3.org/TR/2000/WD-xml-c14n-20000119.html
 #
 #	The latest version of this document is at:
 #
@@ -25,17 +25,21 @@
 
 use XML::Parser;
 
+my $indoctype = 0;
+my $inroot = 0;
 my $p = new XML::Parser(ErrorContext  => 2,
 			Namespaces    => 1,
 			ParseParamEnt => 1,
 			Handlers      => {Start => \&sthndl,
 					  End   => \&endhndl,
-					  Char  => \&chrhndl
+					  Char  => \&chrhndl,
+					  Proc  => \&proc,
+					  Doctype => sub {$indoctype = 1},
+					  DoctypeFin => sub {$indoctype = 0}
 					 }
 			);
 
 $p->parse(*STDIN);
-print "\n";
 
 ################
 ## End main
@@ -45,6 +49,7 @@ sub sthndl {
   my $xp = shift;
   my $el = shift;
 
+  $inroot = 1 unless $inroot;
   my $ns_index = 1;
 
   my $elns = $xp->namespace($el);
@@ -86,6 +91,10 @@ sub endhndl {
 
   my $nm = $xp->namespace($el) ? "n1:$el" : $el;
   print "</$nm>";
+  if ($xp->depth == 0) {
+    $inroot = 0;
+    print "\n";
+  }
 }  # End endhndl
 
 sub chrhndl {
@@ -93,6 +102,15 @@ sub chrhndl {
 
   print $xp->xml_escape($data, '>', "\xD");
 }  # End chrhndl
+
+sub proc {
+  my ($xp, $target, $data) = @_;
+
+  unless ($indoctype) {
+    print "<?$target $data?>";
+    print "\n" unless $inroot;
+  }
+}
 
 # Tell emacs that this is really a perl script
 #Local Variables:

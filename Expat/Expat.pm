@@ -12,9 +12,9 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.27" ;
+$VERSION = "2.28" ;
 
-$have_File_Spec = do 'File/Spec.pm';
+$have_File_Spec = $INC{'File/Spec.pm'} || do 'File/Spec.pm';
 
 %Encoding_Table = ();
 if ($have_File_Spec) {
@@ -42,17 +42,19 @@ bootstrap XML::Parser::Expat $VERSION;
 		    Unparsed => \&SetUnparsedEntityDeclHandler,
 		    Notation => \&SetNotationDeclHandler,
 		    ExternEnt => \&SetExternalEntityRefHandler,
+		    ExternEntFin => \&SetExtEntFinishHandler,
 		    Entity => \&SetEntityDeclHandler,
 		    Element => \&SetElementDeclHandler,
 		    Attlist => \&SetAttListDeclHandler,
 		    Doctype => \&SetDoctypeHandler,
+		    DoctypeFin => \&SetEndDoctypeHandler,
 		    XMLDecl => \&SetXMLDeclHandler
 		    );
 
 sub new {
   my ($class, %args) = @_;
   my $self = bless \%args, $_[0];
-  $args{Used} = 0;
+  $args{_State_} = 0;
   $args{Context} = [];
   $args{Namespaces} ||= 0;
   $args{ErrorMessage} ||= '';
@@ -129,7 +131,8 @@ sub setHandlers {
   return @ret;
 }
 
-sub xpcroak {
+sub xpcroak
+ {
   my ($self, $message) = @_;
 
   my $eclines = $self->{ErrorContext};
@@ -153,37 +156,54 @@ sub xpcarp {
 
 sub default_current {
   my $self = shift;
-  DefaultCurrent($self->{Parser});
+  if ($self->{_State_} == 1) {
+    return DefaultCurrent($self->{Parser});
+  }
 }
 
 sub recognized_string {
   my $self = shift;
-  RecognizedString($self->{Parser});
+  if ($self->{_State_} == 1) {
+    return RecognizedString($self->{Parser});
+  }
 }
 
 sub original_string {
   my $self = shift;
-  OriginalString($self->{Parser});
+  if ($self->{_State_} == 1) {
+    return OriginalString($self->{Parser});
+  }
 }
 
 sub current_line {
-  GetCurrentLineNumber($_[0]->{Parser});
+  my $self = shift;
+  if ($self->{_State_} == 1) {
+    return GetCurrentLineNumber($self->{Parser});
+  }
 }
 
 sub current_column {
-  GetCurrentColumnNumber($_[0]->{Parser});
+  my $self = shift;
+  if ($self->{_State_} == 1) {
+    return GetCurrentColumnNumber($self->{Parser});
+  }
 }
 
 sub current_byte {
-  GetCurrentByteIndex($_[0]->{Parser});
+  my $self = shift;
+  if ($self->{_State_} == 1) {
+    return GetCurrentByteIndex($self->{Parser});
+  }
 }
 
 sub base {
   my ($self, $newbase) = @_;
-  my $p = $self->{Parser};
-  my $oldbase = GetBase($p);
-  SetBase($p, $newbase) if @_ > 1;
-  $oldbase;
+  if ($self->{_State_} == 1) {
+    my $p = $self->{Parser};
+    my $oldbase = GetBase($p);
+    SetBase($p, $newbase) if @_ > 1;
+    return $oldbase;
+  }
 }
 
 sub context {
@@ -219,7 +239,9 @@ sub depth {
 sub element_index {
   my ($self) = @_;
 
-  ElementIndex($self->{Parser});
+  if ($self->{_State_} == 1) {
+    return ElementIndex($self->{Parser});
+  }
 }
 
 ################
@@ -322,51 +344,46 @@ sub NamespaceEnd {
 
 ################
 
-sub is_defaulted {
-  my ($self, $attname) = @_;
-
-  warn <<'End_of_Warning;';
-The is_defaulted method no longer works.
-Please use the specified_attr method instead. The is_defaulted method will
-be removed altogether in a future version.
-End_of_Warning;
-  return 0;
-}
-
 sub specified_attr {
   my $self = shift;
   
-  GetSpecifiedAttributeCount($self->{Parser});
+  if ($self->{_State_} == 1) {
+    return GetSpecifiedAttributeCount($self->{Parser});
+  }
 }
 
 sub finish {
   my ($self) = @_;
-  my $parser = $self->{Parser};
-  UnsetAllHandlers($parser);
+  if ($self->{_State_} == 1) {
+    my $parser = $self->{Parser};
+    UnsetAllHandlers($parser);
+  }
 }
 
 sub position_in_context {
   my ($self, $lines) = @_;
-  my $parser = $self->{Parser};
-  my ($string, $linepos) = PositionContext($parser, $lines);
+  if ($self->{_State_} == 1) {
+    my $parser = $self->{Parser};
+    my ($string, $linepos) = PositionContext($parser, $lines);
 
-  return '' unless defined($string);
+    return '' unless defined($string);
 
-  my $col = GetCurrentColumnNumber($parser);
-  my $ptr = ('=' x ($col - 1)) . '^' . "\n";
-  my $ret;
-  my $dosplit = $linepos < length($string);
+    my $col = GetCurrentColumnNumber($parser);
+    my $ptr = ('=' x ($col - 1)) . '^' . "\n";
+    my $ret;
+    my $dosplit = $linepos < length($string);
   
-  $string .= "\n" unless $string =~ /\n$/;
+    $string .= "\n" unless $string =~ /\n$/;
   
-  if ($dosplit) {
-    $ret = substr($string, 0, $linepos) . $ptr
-      . substr($string, $linepos);
-  } else {
-    $ret = $string . $ptr;
+    if ($dosplit) {
+      $ret = substr($string, 0, $linepos) . $ptr
+	. substr($string, $linepos);
+    } else {
+      $ret = $string . $ptr;
+    }
+  
+    return $ret;
   }
-  
-  $ret;
 }
 
 sub xml_escape {
@@ -377,6 +394,8 @@ sub xml_escape {
   $text =~ s/\&/\&amp;/g;
   $text =~ s/</\&lt;/g;
   foreach (@_) {
+    croak "xml_escape: '$_' isn't a single character" if length($_) > 1;
+
     if ($_ eq '>') {
       $text =~ s/>/\&gt;/g;
     }
@@ -388,7 +407,13 @@ sub xml_escape {
     }
     else {
       my $rep = '&#' . sprintf('x%X', ord($_)) . ';';
-      $text =~ s/$_/$rep/g;
+      if (/\W/) {
+	my $ptrn = "\\$_";
+	$text =~ s/$ptrn/$rep/g;
+      }
+      else {
+	$text =~ s/$_/$rep/g;
+      }
     }
   }
   $text;
@@ -396,7 +421,9 @@ sub xml_escape {
 
 sub skip_until {
   my $self = shift;
-  SkipUntil($self->{Parser}, $_[0]);
+  if ($self->{_State_} <= 1) {
+    SkipUntil($self->{Parser}, $_[0]);
+  }
 }
 
 sub release {
@@ -412,8 +439,8 @@ sub DESTROY {
 sub parse {
   my $self = shift;
   my $arg = shift;
-  croak "Parse already in progress (Expat)" if $self->{Used};
-  $self->{Used} = 1;
+  croak "Parse already in progress (Expat)" if $self->{_State_};
+  $self->{_State_} = 1;
   my $parser = $self->{Parser};
   my $ioref;
   my $result = 0;
@@ -425,6 +452,7 @@ sub parse {
       eval {
 	$ioref = *{$arg}{IO};
       };
+      undef $@;
     }
   }
   
@@ -443,6 +471,7 @@ sub parse {
     $result = ParseString($parser, $arg);
   }
   
+  $self->{_State_} = 2;
   $result or croak $self->{ErrorMessage};
 }
 
@@ -453,13 +482,100 @@ sub parsestring {
 
 sub parsefile {
   my $self = shift;
-  croak "Parser has already been used" if $self->{Used};
+  croak "Parser has already been used" if $self->{_State_};
   local(*FILE);
   open(FILE, $_[0]) or  croak "Couldn't open $_[0]:\n$!";
   binmode(FILE);
   my $ret = $self->parse(*FILE);
   close(FILE);
   $ret;
+}
+
+################################################################
+package XML::Parser::ContentModel;
+use overload '""' => \&asString, 'eq' => \&thiseq;
+
+sub EMPTY  () {1}
+sub ANY    () {2}
+sub MIXED  () {3}
+sub NAME   () {4}
+sub CHOICE () {5}
+sub SEQ    () {6}
+
+
+sub isempty {
+  return $_[0]->{Type} == EMPTY;
+}
+
+sub isany {
+  return $_[0]->{Type} == ANY;
+}
+
+sub ismixed {
+  return $_[0]->{Type} == MIXED;
+}
+
+sub isname {
+  return $_[0]->{Type} == NAME;
+}
+
+sub name {
+  return $_[0]->{Tag};
+}
+
+sub ischoice {
+  return $_[0]->{Type} == CHOICE;
+}
+
+sub isseq {
+  return $_[0]->{Type} == SEQ;
+}
+
+sub quant {
+  return $_[0]->{Quant};
+}
+
+sub children {
+  my $children = $_[0]->{Children};
+  if (defined $children) {
+    return @$children;
+  }
+  return undef;
+}
+
+sub asString {
+  my ($self) = @_;
+  my $ret;
+
+  if ($self->{Type} == NAME) {
+    $ret = $self->{Tag};
+  }
+  elsif ($self->{Type} == EMPTY) {
+    return "EMPTY";
+  }
+  elsif ($self->{Type} == ANY) {
+    return "ANY";
+  }
+  elsif ($self->{Type} == MIXED) {
+    $ret = '(#PCDATA';
+    foreach (@{$self->{Children}}) {
+      $ret .= '|' . $_;
+    }
+    $ret .= ')';
+  }
+  else {
+    my $sep = $self->{Type} == CHOICE ? '|' : ',';
+    $ret = '(' . join($sep, @{$self->{Children}}) . ')';
+  }
+
+  $ret .= $self->{Quant} if $self->{Quant};
+  return $ret;
+}
+
+sub thiseq {
+  my $self = shift;
+
+  return $self->asString eq $_[0];
 }
 
 ################################################################
@@ -505,6 +621,8 @@ sub parse_done {
     $self->release;
     croak $msg;
   }
+
+  $self->{_State_} = 2;
 
   my $result = $ret;
   my @result = ();
@@ -740,8 +858,13 @@ the contents of the external entity, or return undef, which indicates the
 external entity couldn't be found and will generate a parse error.
 
 If an open filehandle is returned, it must be returned as either a glob
-(*FOO) or as a reference to a glob (e.g. an instance of IO::Handle). The
-parser will close the filehandle after using it.
+(*FOO) or as a reference to a glob (e.g. an instance of IO::Handle).
+
+=item * ExternEntFin		(Parser)
+
+This is called after an external entity has been parsed. It allows
+applications to perform cleanup on actions performed in the above
+ExternEnt handler.
 
 =item * Entity			(Parser, Name, Val, Sysid, Pubid, Ndata)
 
@@ -760,7 +883,9 @@ set, then this handler will not be called for unparsed entities.
 =item * Element			(Parser, Name, Model)
 
 The element handler is called when an element declaration is found. Name is
-the element name, and Model is the content model as a string.
+the element name, and Model is the content model as an
+XML::Parser::ContentModel object. See L<"XML::Parser::ContentModel Methods">
+for methods available for this class.
 
 =item * Attlist			(Parser, Elname, Attname, Type, Default, Fixed)
 
@@ -778,21 +903,22 @@ with a quote character). If Fixed is true, then this is a fixed attribute.
 This handler is called for DOCTYPE declarations. Name is the document type
 name. Sysid is the system id of the document type, if it was provided,
 otherwise it's undefined. Pubid is the public id of the document type,
-which will be undefined if no public id was given. Internal is the internal
-subset, given as a string. If there was no internal subset, it will be
-undefined. Internal will contain all whitespace, comments, processing
-instructions, and declarations seen in the internal subset. The declarations
-will be there whether or not they have been processed by another handler
-(except for unparsed entities processed by the Unparsed handler). However,
-comments and processing instructions will not appear if they've been processed
-by their respective handlers.
+which will be undefined if no public id was given. Internal will be
+true or false, indicating whether or not the doctype declaration contains
+an internal subset.
+
+=item * DoctypeFin		(Parser)
+
+This handler is called after parsing of the DOCTYPE declaration has finished,
+including any internal or external DTD declarations.
 
 =item * XMLDecl			(Parser, Version, Encoding, Standalone)
 
-This handler is called for xml declarations. Version is a string containg
+This handler is called for XML declarations. Version is a string containg
 the version. Encoding is either undefined or contains an encoding string.
-Standalone will be either true, false, or undefined if the standalone attribute
-is yes, no, or not made respectively.
+Standalone is either undefined, or true or false. Undefined indicates
+that no standalone parameter was given in the XML declaration. True or
+false indicates "yes" or "no" respectively.
 
 =back
 
@@ -841,19 +967,23 @@ currently bound, '#default' appears in the list.
 Returns the string from the document that was recognized in order to call
 the current handler. For instance, when called from a start handler, it
 will give us the the start-tag string. The string is encoded in UTF-8.
+This method doesn't return a meaningful string inside declaration handlers.
 
 =item original_string
 
 Returns the verbatim string from the document that was recognized in
 order to call the current handler. The string is in the original document
-encoding.
+encoding. This method doesn't return a meaningful string inside declaration
+handlers.
 
 =item default_current
 
 When called from a handler, causes the sequence of characters that generated
 the corresponding event to be sent to the default handler (if one is
 registered). Use of this method is deprecated in favor the recognized_string
-method, which you can use without installing a default handler.
+method, which you can use without installing a default handler. This
+method doesn't deliver a meaningful string to the default handler when
+called from inside declaration handlers.
 
 =item xpcroak(message)
 
@@ -991,6 +1121,57 @@ method breaks those references (and makes the instance unusable.)
 
 Normally, higher level calls handle this for you, but if you are using
 XML::Parser::Expat directly, then it's your responsibility to call it.
+
+=back
+
+=head2 XML::Parser::ContentModel Methods
+
+The element declaration handlers are passed objects of this class as the
+content model of the element declaration. They also represent content
+particles, components of a content model.
+
+When referred to as a string, these objects are automagicly converted to a
+string representation of the model (or content particle).
+
+=over 4
+
+=item isempty
+
+This method returns true if the object is "EMPTY", false otherwise.
+
+=item isany
+
+This method returns true if the object is "ANY", false otherwise.
+
+=item ismixed
+
+This method returns true if the object is "(#PCDATA)" or "(#PCDATA|...)*",
+false otherwise.
+
+=item isname
+
+This method returns if the object is an element name.
+
+=item ischoice
+
+This method returns true if the object is a choice of content particles.
+
+
+=item isseq
+
+This method returns true if the object is a sequence of content particles.
+
+=item quant
+
+This method returns undef or a string representing the quantifier
+('?', '*', '+') associated with the model or particle.
+
+=item children
+
+This method returns undef or (for mixed, choice, and sequence types)
+an array of component content particles. There will always be at least
+one component for choices and sequences, but for a mixed content model
+of pure PCDATA, "(#PCDATA)", then an undef is returned.
 
 =back
 

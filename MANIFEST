@@ -6,27 +6,13 @@ Expat/README			comments about expat library
 Expat/encoding.h		Header file; describes *.enc structure
 Expat/typemap			XS typemap
 Expat/expat.patches		expat patches (may be empty)
-Expat/expat/Makefile
-Expat/expat/bin/xmlparse.dll
-Expat/expat/bin/xmltok.dll
-Expat/expat/bin/xmlwf.exe
-Expat/expat/expat.dsw
 Expat/expat/expat.html
-Expat/expat/gennmtab/gennmtab.c
-Expat/expat/gennmtab/gennmtab.dsp
-Expat/expat/lib/xmlparse.lib
-Expat/expat/lib/xmltok.lib
-Expat/expat/sample/build.bat
-Expat/expat/sample/elements.c
 Expat/expat/xmlparse/hashtable.c
 Expat/expat/xmlparse/hashtable.h
 Expat/expat/xmlparse/xmlparse.c
-Expat/expat/xmlparse/xmlparse.c.orig
-Expat/expat/xmlparse/xmlparse.dsp
 Expat/expat/xmlparse/xmlparse.h
-Expat/expat/xmlparse/xmlparse.h.orig
+Expat/expat/xmltok/ascii.h
 Expat/expat/xmltok/asciitab.h
-Expat/expat/xmltok/dllmain.c
 Expat/expat/xmltok/iasciitab.h
 Expat/expat/xmltok/latin1tab.h
 Expat/expat/xmltok/nametab.h
@@ -35,22 +21,10 @@ Expat/expat/xmltok/xmldef.h
 Expat/expat/xmltok/xmlrole.c
 Expat/expat/xmltok/xmlrole.h
 Expat/expat/xmltok/xmltok.c
-Expat/expat/xmltok/xmltok.dsp
 Expat/expat/xmltok/xmltok.h
 Expat/expat/xmltok/xmltok_impl.c
 Expat/expat/xmltok/xmltok_impl.h
 Expat/expat/xmltok/xmltok_ns.c
-Expat/expat/xmlwf/codepage.c
-Expat/expat/xmlwf/codepage.h
-Expat/expat/xmlwf/filemap.h
-Expat/expat/xmlwf/readfilemap.c
-Expat/expat/xmlwf/unixfilemap.c
-Expat/expat/xmlwf/win32filemap.c
-Expat/expat/xmlwf/xmlfile.c
-Expat/expat/xmlwf/xmlfile.h
-Expat/expat/xmlwf/xmltchar.h
-Expat/expat/xmlwf/xmlwf.c
-Expat/expat/xmlwf/xmlwf.dsp
 MANIFEST			This file
 Makefile.PL			perl MakeMaker script for XML::Parser
 Parser.pm			XML::Parser module
@@ -88,6 +62,8 @@ t/encoding.t			Test script
 t/external_ent.t		Test script
 t/file.t			Test script
 t/finish.t			Test script
+t/ext.ent			External entity for parament.t test
+t/ext2.ent			External entity for parament.t test
 t/foo.dtd			External DTD for parament.t test
 t/namespaces.t			Test script
 t/parament.t			Test script

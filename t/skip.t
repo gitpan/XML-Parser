@@ -25,7 +25,6 @@ sub cmnt {
 sub start {
   my ($xp, $el) = @_;
   my $ndx = $xp->element_index;
-
   if (! $authseen and $el eq 'authlist') {
     $authseen = 1;
     $xp->skip_until(2000);
@@ -41,7 +40,7 @@ my $p = new XML::Parser(Handlers => {Init    => \&init,
 				     Proc    => \&proc
 				     });
 
-$p->parsefile(':samples:REC-xml-19980210.xml');
+$p->parsefile('samples/REC-xml-19980210.xml');
 
 print "not " if $between_count;
 print "ok 2\n";
@@ -51,3 +50,4 @@ print "ok 3\n";
 
 print "not " unless $cmnt_count == 5;
 print "ok 4\n";
+

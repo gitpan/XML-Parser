@@ -23,7 +23,7 @@ $parser = new XML::Parser(Handlers => {Start => \&st,
 			  ErrorContext => 2);
 
 
-$parser->parsefile(':samples:REC-xml-19980210.xml');
+$parser->parsefile('samples/REC-xml-19980210.xml');
 
 print "not " unless $stcount == 12;
 print "ok 2\n";
