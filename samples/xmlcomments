@@ -1,8 +1,8 @@
 #!/usr/local/bin/perl -w
 #
-# $Revision: 1.2 $
+# $Revision: 1.3 $
 #
-# $Date: 1998/09/25 22:36:34 $
+# $Date: 1998/12/01 02:56:34 $
 
 use XML::Parser;
 
@@ -34,7 +34,7 @@ sub comments
     print "$line:\t<!--$data-->\n";
     $count++;
 
-}  # End of default_handler
+}  # End comments
 
 # Tell Emacs that this is really a perl script
 # Local Variables:

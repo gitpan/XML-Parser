@@ -2,6 +2,7 @@ Changes				Change log
 Expat/Expat.pm			XML::Parser::Expat module
 Expat/Expat.xs			Extension library
 Expat/Makefile.PL		perl MakeMaker script for XML::Parser::Expat
+Expat/encoding.h		Header file; describes *.enc structure
 Expat/typemap			XS typemap
 Expat/expat/MPL-1_0.html
 Expat/expat/Makefile
@@ -44,6 +45,17 @@ Expat/expat/xmlwf/xmlwf.c
 MANIFEST			This file
 Makefile.PL			perl MakeMaker script for XML::Parser
 Parser.pm			XML::Parser module
+Parser/Encodings/README		Info about encoding maps
+Parser/Encodings/big5.enc	Big5 binary encoding map
+Parser/Encodings/iso-8859-2.enc	ISO-8859-2 binary encoding map
+Parser/Encodings/iso-8859-3.enc	ISO-8859-3 binary encoding map
+Parser/Encodings/iso-8859-4.enc	ISO-8859-4 binary encoding map
+Parser/Encodings/iso-8859-5.enc	ISO-8859-5 binary encoding map
+Parser/Encodings/iso-8859-7.enc ISO-8859-7 binary encoding map
+Parser/Encodings/iso-8859-8.enc	ISO-8859-8 binary encoding map
+Parser/Encodings/iso-8859-9.enc	ISO-8859-9 binary encoding map
+Parser/Encodings/shift_jis.enc	Shift_JIS binary encoding map
+Parser/Encodings/windows-1250.enc cp1250-WinLatin2 binary encoding map
 README				Short explanation
 samples/REC-xml-19980210.xml	The XML spec in xml form
 samples/xmlcomments		A utility to extract comments
@@ -51,6 +63,7 @@ samples/xmlfilter		A utility to filter elements
 samples/xmlstats		A utility to report on element statistics
 t/astress.t			Test script
 t/decl.t			Test script
+t/encoding.t			Test script
 t/file.t			Test script
 t/namespaces.t			Test script
 t/stream.t			Test script

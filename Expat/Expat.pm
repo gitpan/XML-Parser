@@ -4,7 +4,7 @@ require 5.004;
 
 use English;
 use strict;
-use vars qw($VERSION @ISA %Handler_Setters);
+use vars qw($VERSION @ISA %Handler_Setters %Encoding_Table @Encoding_Path);
 use Carp;
 
 use IO::Handle;
@@ -12,8 +12,10 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
+$VERSION = "2.17" ;
 
-$VERSION = "2.16" ;
+%Encoding_Table = ();
+@Encoding_Path = (grep(-d $_, map($_ . '/XML/Parser/Encodings', @INC)), '.');
 
 bootstrap XML::Parser::Expat $VERSION;
 
@@ -35,125 +37,161 @@ bootstrap XML::Parser::Expat $VERSION;
 		    );
 
 sub new {
-    my ($class, %args) = @_;
-    my $self = bless \%args, $_[0];
-    $args{Used} = 0;
-    $args{Context} = [];
-    $args{Namespaces} ||= 0;
-    $args{Namespace_Table} = {};
-    $args{Namespace_List} = [undef];
-    $args{_Setters} = \%Handler_Setters;
-    $args{Parser} = ParserCreate($self, $args{ProtocolEncoding},
-				 $args{Namespaces});
-    $self;
+  my ($class, %args) = @_;
+  my $self = bless \%args, $_[0];
+  $args{Used} = 0;
+  $args{Context} = [];
+  $args{Namespaces} ||= 0;
+  $args{Namespace_Table} = {};
+  $args{Namespace_List} = [undef];
+  $args{_Setters} = \%Handler_Setters;
+  $args{Parser} = ParserCreate($self, $args{ProtocolEncoding},
+			       $args{Namespaces});
+  $self;
 }
 
-sub setHandlers
-{
-    my ($self, @handler_pairs) = @_;
+sub load_encoding {
+  my ($file) = @_;
 
-    croak("Uneven number of arguments to setHandlers method")
-	if (int(@handler_pairs) & 1);
-
-    while (@handler_pairs)
-    {
-	my $type = shift @handler_pairs;
-	my $handler = shift @handler_pairs;
-	my $hndl = $self->{_Setters}->{$type};
-
-	unless (defined($hndl))
-	{
-	    my @types = sort keys %{$self->{_Setters}};
-
-	    croak("Unknown Expat handler type: $type\n Valid types: @types");
-	}
-
-	&$hndl($self->{Parser}, $handler);
+  $file =~ s![^/]+$!\L$&\E!;
+  $file .= '.enc' unless $file =~ /\.enc$/;
+  unless ($file =~ m!^/!) {
+    foreach (@Encoding_Path) {
+      my $tmp = "$_/$file";
+      if (-e $tmp) {
+	$file = $tmp;
+	last;
+      }
     }
-}
+  }
 
-sub default_current
-{
-    my $self = shift;
-    DefaultCurrent($self->{Parser});
-}
+  local(*ENC);
+  open(ENC, $file) or croak("Couldn't open encmap $file:\n$!\n");
+  binmode(ENC);
+  my $data;
+  my $br = sysread(ENC, $data, -s $file);
+  croak("Trouble reading $file:\n$!\n")
+    unless defined($br);
+  close(ENC);
 
-sub current_line
-{
-    GetCurrentLineNumber($_[0]->{Parser});
-}
+  my $name = LoadEncoding($data, $br);
+  croak("$file isn't an encmap file")
+    unless defined($name);
 
-sub current_column
-{
-    GetCurrentColumnNumber($_[0]->{Parser});
-}
+  $name;
+}  # End load_encoding
 
-sub current_byte
-{
-    GetCurrentByteIndex($_[0]->{Parser});
-}
+sub setHandlers {
+  my ($self, @handler_pairs) = @_;
 
-sub base
-{
-    my ($self, $newbase) = @_;
-    my $p = $self->{Parser};
-    my $oldbase = GetBase($p);
-    SetBase($p, $newbase) if @_ > 1;
-    $oldbase;
-}
+  croak("Uneven number of arguments to setHandlers method")
+    if (int(@handler_pairs) & 1);
 
-sub context
-{
-    my $ctx = $_[0]->{Context};
-    @$ctx;
-}
+  while (@handler_pairs) {
+    my $type = shift @handler_pairs;
+    my $handler = shift @handler_pairs;
+    my $hndl = $self->{_Setters}->{$type};
 
-sub current_element
-{
-    my ($self) = @_;
-    $self->{Context}->[-1];
-}
-
-sub in_element
-{
-    my ($self, $element) = @_;
-    $self->{Context}->[-1] eq $element;
-}
-
-sub within_element
-{
-    my ($self, $element) = @_;
-    my $cnt = 0;
-    foreach (@{$self->{Context}})
-    {
-	$cnt++ if $_ eq $element;
+    unless (defined($hndl)) {
+      my @types = sort keys %{$self->{_Setters}};
+      croak("Unknown Expat handler type: $type\n Valid types: @types");
     }
-    return $cnt;
+
+    &$hndl($self->{Parser}, $handler);
+  }
 }
 
-sub depth
-{
-    my ($self) = @_;
-    int(@{$self->{Context}});
+sub xpcroak {
+  my ($self, $message) = @_;
+
+  my $eclines = $self->{ErrorContext};
+  my $line = GetCurrentLineNumber($_[0]->{Parser});
+  $message .= " at line $line";
+  $message .= ":\n" . $self->position_in_context($eclines)
+    if defined($eclines);
+  croak $message;
 }
 
-sub namespace
-{
-    my ($self, $name) = @_;
-    local($WARNING) = 0;
-    $self->{Namespace_List}->[$name];
+sub xpcarp {
+  my ($self, $message) = @_;
+
+  my $eclines = $self->{ErrorContext};
+  my $line = GetCurrentLineNumber($_[0]->{Parser});
+  $message .= " at line $line";
+  $message .= ":\n" . $self->position_in_context($eclines)
+    if defined($eclines);
+  carp $message;
 }
 
-sub eq_name
-{
-    my ($self, $nm1, $nm2) = @_;
-    local($WARNING) = 0;
-
-    $nm1 == $nm2 and $nm1 eq $nm2;
+sub default_current {
+  my $self = shift;
+  DefaultCurrent($self->{Parser});
 }
 
-sub generate_ns_name
-{
+sub current_line {
+  GetCurrentLineNumber($_[0]->{Parser});
+}
+
+sub current_column {
+  GetCurrentColumnNumber($_[0]->{Parser});
+}
+
+sub current_byte {
+  GetCurrentByteIndex($_[0]->{Parser});
+}
+
+sub base {
+  my ($self, $newbase) = @_;
+  my $p = $self->{Parser};
+  my $oldbase = GetBase($p);
+  SetBase($p, $newbase) if @_ > 1;
+  $oldbase;
+}
+
+sub context {
+  my $ctx = $_[0]->{Context};
+  @$ctx;
+}
+
+sub current_element {
+  my ($self) = @_;
+  @{$self->{Context}} ? $self->{Context}->[-1] : undef;
+}
+
+sub in_element {
+  my ($self, $element) = @_;
+  @{$self->{Context}} ? $self->eq_name($self->{Context}->[-1], $element)
+    : undef;
+}
+
+sub within_element {
+  my ($self, $element) = @_;
+  my $cnt = 0;
+  foreach (@{$self->{Context}}) {
+    $cnt++ if $self->eq_name($_, $element);
+  }
+  return $cnt;
+}
+
+sub depth {
+  my ($self) = @_;
+  int(@{$self->{Context}});
+}
+
+sub namespace {
+  my ($self, $name) = @_;
+  local($WARNING) = 0;
+  $self->{Namespace_List}->[$name];
+}
+
+sub eq_name {
+  my ($self, $nm1, $nm2) = @_;
+  local($WARNING) = 0;
+
+  $nm1 == $nm2 and $nm1 eq $nm2;
+}
+
+sub generate_ns_name {
   my ($self, $name, $namespace) = @_;
 
   $namespace ?
@@ -162,90 +200,92 @@ sub generate_ns_name
       : $name;
 }
 
-sub position_in_context
-{
-    my ($self, $lines) = @_;
-    my $parser = $self->{Parser};
-    my ($string, $linepos) = PositionContext($parser, $lines);
-    my $col = GetCurrentColumnNumber($parser);
-    my $ptr = ('=' x ($col - 1)) . '^' . "\n";
-    my $ret;
-    my $dosplit = $linepos < length($string);
-
-    $string .= "\n" unless $string =~ /\n$/;
-
-    if ($dosplit)
-    {
-	$ret = substr($string, 0, $linepos) . $ptr
-	    . substr($string, $linepos);
-    }
-    else
-    {
-	$ret = $string . $ptr;
-    }
-
-    $ret;
+sub position_in_context {
+  my ($self, $lines) = @_;
+  my $parser = $self->{Parser};
+  my ($string, $linepos) = PositionContext($parser, $lines);
+  my $col = GetCurrentColumnNumber($parser);
+  my $ptr = ('=' x ($col - 1)) . '^' . "\n";
+  my $ret;
+  my $dosplit = $linepos < length($string);
+  
+  $string .= "\n" unless $string =~ /\n$/;
+  
+  if ($dosplit) {
+    $ret = substr($string, 0, $linepos) . $ptr
+      . substr($string, $linepos);
+  } else {
+    $ret = $string . $ptr;
+  }
+  
+  $ret;
 }
-    
+
 sub DESTROY {
-    my $self = shift;
-    ParserFree($self->{Parser});
+  my $self = shift;
+  ParserFree($self->{Parser});
 }
 
 sub parse {
-    my $self = shift;
-    my $arg = shift;
-    croak "Parser has already been used" if $self->{Used};
-    $self->{Used} = 1;
-    my $parser = $self->{Parser};
-    my $ioref;
-    my $result = 0;
-    $self->{ErrorMessage} ||= '';
-
-    if (defined $arg) {
-      if (ref($arg) and UNIVERSAL::isa($arg, 'IO::Handler'))
-	{
-	  $ioref = $arg;
-	}
-      else {
-	eval {
-	  $ioref = *{$arg}{IO};
-	};
-      }
+  my $self = shift;
+  my $arg = shift;
+  croak "Parse already in progress (Expat)" if $self->{Used};
+  $self->{Used} = 1;
+  my $parser = $self->{Parser};
+  my $ioref;
+  my $result = 0;
+  $self->{ErrorMessage} ||= '';
+  
+  if (defined $arg) {
+    if (ref($arg) and UNIVERSAL::isa($arg, 'IO::Handler')) {
+      $ioref = $arg;
+    } else {
+      eval {
+	$ioref = *{$arg}{IO};
+      };
     }
-
-    if (defined($ioref)) {
-      my $delim = $self->{Stream_Delimiter};
-      my $prev_rs;
-
-      $prev_rs = $ioref->input_record_separator("\n$delim\n")
-	if defined($delim);
-	  
-      $result = ParseStream($parser, $ioref, $delim);
-
-      $ioref->input_record_separator($prev_rs)
-	if defined($delim);
-    }
-    else {
-      $result = ParseString($parser, $arg);
-    }
-
-    $result or croak $self->{ErrorMessage};
+  }
+  
+  if (defined($ioref)) {
+    my $delim = $self->{Stream_Delimiter};
+    my $prev_rs;
+    
+    $prev_rs = ref($ioref)->input_record_separator("\n$delim\n")
+      if defined($delim);
+    
+    $result = ParseStream($parser, $ioref, $delim);
+    
+    ref($ioref)->input_record_separator($prev_rs)
+      if defined($delim);
+  } else {
+    $result = ParseString($parser, $arg);
+  }
+  
+  $result or croak $self->{ErrorMessage};
 }
 
 sub parsestring {
-    my $self = shift;
-    $self->parse(@_);
+  my $self = shift;
+  $self->parse(@_);
 }
 
 sub parsefile {
-    my $self = shift;
-    croak "Parser has already been used" if $self->{Used};
-    local(*FILE);
-    open(FILE, $_[0]) or  croak "Couldn't open $_[0]:\n$!";
-    my $ret = $self->parse(*FILE);
-    close(FILE);
-    $ret;
+  my $self = shift;
+  croak "Parser has already been used" if $self->{Used};
+  local(*FILE);
+  open(FILE, $_[0]) or  croak "Couldn't open $_[0]:\n$!";
+  my $ret = $self->parse(*FILE);
+  close(FILE);
+  $ret;
+}
+
+################################################################
+
+package XML::Parser::Encinfo;
+
+sub DESTROY {
+  my $self = shift;
+  FreeEncoding($self);
 }
 
 1;
@@ -311,8 +351,10 @@ passed as keyword value pairs. The recognized options are:
 =item * ProtocolEncoding
 
 The protocol encoding name. The default is none. The expat built-in
-encodings are: C<UTF-8>, C<ISO-8859-1>, C<UTF-16>, and C<US-ASCII>. Setting
-this overrides any encoding in the XML declaration.
+encodings are: C<UTF-8>, C<ISO-8859-1>, C<UTF-16>, and C<US-ASCII>.
+Other encodings may be used if they have encoding maps in one of the
+directories in the @Encoding_Path list. Setting the protocol encoding
+overrides any encoding in the XML declaration.
 
 =item * Namespaces
 
@@ -506,13 +548,26 @@ a call to the generate_ns_name method.
 =item generate_ns_name(name, namespace)
 
 Return a name, associated with a given namespace, good for using with the
-above 2 methods.
+above 2 methods. The namespace argument should be the namespace URI, not
+a prefix.
 
 =item default_current
 
 When called from a handler, causes the sequence of characters that generated
 the corresponding event to be sent to the default handler (if one is
 registered).
+
+=item xpcroak(message)
+
+Concatenate onto the given message the current line number within the
+XML document plus the message implied by ErrorContext. Then croak with
+the formed message.
+
+=item xpcarp(message)
+
+Concatenate onto the given message the current line number within the
+XML document plus the message implied by ErrorContext. Then carp with
+the formed message.
 
 =item current_line
 
@@ -543,11 +598,16 @@ Returns the name of the innermost currently opened element.
 =item in_element(NAME)
 
 Returns true if NAME is equal to the name of the innermost currently opened
-element.
+element. If namespace processing is being used and you want to check
+against a name that may be in a namespace, then use the generate_ns_name
+method to create the NAME argument.
 
 =item within_element(NAME)
 
 Returns the number of times the given name appears in the context list.
+If namespace processing is being used and you want to check
+against a name that may be in a namespace, then use the generate_ns_name
+method to create the NAME argument.
 
 =item depth
 
@@ -581,12 +641,27 @@ parsefile has been called previously for this instance.
 
 =back
 
-=head1 UNIMPLEMENTED
+=head1 FUNCTIONS
 
-The following parts of the expat API are not currently accessible via this
-extension:
+=over 4
 
-	XML_SetUnknownEncodingHandler
+=item XML::Parser::Expat::load_encoding(ENCODING)
+
+Load an external encoding. ENCODING is either the name of an encoding or
+the name of a file. The basename is converted to lowercase and a '.enc'
+extension is appended unless there's one already there. Then, unless
+it's an absolute pathname (i.e. begins with '/'), the first file by that
+name discovered in the @Encoding_Path path list is used.
+
+The encoding in the file is loaded and kept in the %Encoding_Table
+table. Earlier encodings of the same name are replaced.
+
+This function is automaticly called by expat when it encounters an encoding
+it doesn't know about. Expat shouldn't call this twice for the same
+encoding name. The only reason users should use this function is to
+explicitly load an encoding not contained in the @Encoding_Path list.
+
+=back
 
 =head1 AUTHORS
 

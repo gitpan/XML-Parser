@@ -1,8 +1,8 @@
 #!/usr/local/bin/perl -w
 #
-# $Revision: 1.2 $
+# $Revision: 1.4 $
 #
-# $Date: 1998/09/25 22:36:35 $
+# $Date: 1998/12/13 22:46:57 $
 
 use XML::Parser;
 
@@ -56,6 +56,7 @@ my %drop_att;
 my %keep_att;
 
 my $always_true = sub {1;};
+my $root_element = '';
 
 # Process options
 
@@ -134,8 +135,6 @@ while (defined($ARGV[0]) and $ARGV[0] =~ /^[-+]/)
 my $drop_el_pattern = join('|', @drop_elpat);
 my $keep_el_pattern = join('|', @keep_elpat);
 
-my $root_element = '';
-
 my $drop_sub;
 if ($drop_el_pattern)
 {
@@ -212,7 +211,7 @@ sub start_handler
     {
 	$pass = ! $pass;
 	$p->setHandlers(Char => ($pass ? \&char_handler : 0));
-	unshift(@togglestack, $p->depth);
+	push(@togglestack, $p->depth);
     }
 
     if ($pass)
@@ -223,6 +222,12 @@ sub start_handler
 	{
 	    my $id = shift;
 	    my $val = shift;
+
+	    # Replace special characters
+	    $val =~ s/&/\&amp;/g;
+	    $val =~ s/</\&lt;/g;
+	    $val =~ s/>/\&gt;/g;
+
 	    print " $id='$val'";
 	}
 	print ">";
@@ -239,11 +244,11 @@ sub end_handler
 	print "</$el>";
     }
 
-    if (@togglestack and $togglestack[0] == $p->depth)
+    if (@togglestack and $togglestack[-1] == $p->depth)
     {
 	$pass = ! $pass;
 	$p->setHandlers(Char => ($pass ? \&char_handler : 0));
-	shift(@togglestack);
+	pop(@togglestack);
     }
 
 }  # End end_handler

@@ -1,7 +1,35 @@
+/*****************************************************************
+** Expat.xs
+**
+** Copyright 1998 Larry Wall and Clark Cooper
+** All rights reserved.
+**
+** This program is free software; you can redistribute it and/or
+** modify it under the same terms as Perl itself.
+**
+*/
+
 #include "EXTERN.h"
-#include "perl.h"
 #include "XSUB.h"
+#include "perl.h"
 #include "xmlparse.h"
+#include "encoding.h"
+
+/* Version 5.005_5x (Development version for 5.006) doesn't like sv_...
+   anymore, but 5.004 doesn't know about PL_sv..
+   Don't want to push up required version just for this. */
+
+#ifndef PL_sv_undef
+#define PL_sv_undef	sv_undef
+#endif
+
+#ifndef PL_sv_no
+#define PL_sv_no	sv_no
+#endif
+
+#ifndef PL_sv_yes
+#define PL_sv_yes	sv_yes
+#endif
 
 #define BUFSIZE 32768
 
@@ -135,6 +163,8 @@ typedef struct {
   SV* notation_sv;
   SV* extent_sv;
 } CallbackVector;
+
+static HV* EncodingTable = NULL;
 
 /* Forward declaration */
 static void
@@ -291,7 +321,7 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
       if (cbv->delim) {
 	br = lblen > BUFSIZE ? BUFSIZE : lblen;
 	if (br)
-	  memcpy(buff, linebuff, br);
+          Copy(linebuff, buff, br, char);
 	linebuff += br;
 	lblen -= br;
 	done = lblen <= 0;
@@ -322,7 +352,7 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
 
 	tb = SvPV(tbuff, br);
 	if (br > 0)
-	  memcpy(buff, tb, br);
+	  Copy(tb, buff, br, char);
 
 	PUTBACK ;
       }
@@ -426,10 +456,8 @@ parse_local(CallbackVector *cbv, const char *str, int len)
     STRLEN newlen = cbv->dtb_len + len;
 
     if (newlen > cbv->dtb_limit) {
-	Malloc_t mret;
-
 	cbv->dtb_limit = ((newlen / DTB_GROW) + 1) * DTB_GROW;
-	cbv->doctype_buffer = realloc(cbv->doctype_buffer, cbv->dtb_limit);
+	Renew(cbv->doctype_buffer, cbv->dtb_limit, char);
     }
 
     strncpy(cbv->doctype_buffer + cbv->dtb_len, (char *) str, len);
@@ -453,7 +481,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
       if ((dflags & INST_INDT) && len == 9 && strnEQ(str, "<!DOCTYPE", len)) {
 	cbv->local_parse_state = PS_Docname;
 	cbv->dtb_limit = DTB_GROW;
-	cbv->doctype_buffer = malloc(cbv->dtb_limit);
+	New(0, cbv->doctype_buffer, cbv->dtb_limit, char);
 	cbv->dtb_len = len;
 	strncpy(cbv->doctype_buffer, str, len);
 	check_and_set_default_handler(cbv->p, cbv, 0, INST_XML);
@@ -519,9 +547,9 @@ parse_local(CallbackVector *cbv, const char *str, int len)
 	if (enc || stand)
 	  XPUSHs(enc
 		 ? sv_2mortal(mynewSVpv(enc, enc_len))
-		 : &sv_undef);
+		 : &PL_sv_undef);
 	if (stand)
-	  XPUSHs((strnEQ(stand, "no", 2)) ? &sv_no : &sv_yes);
+	  XPUSHs((strnEQ(stand, "no", 2)) ? &PL_sv_no : &PL_sv_yes);
 
 	PUTBACK;
 	perl_call_sv(cbv->xmldec_sv, G_DISCARD);
@@ -792,7 +820,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
 	XPUSHs(sv_2mortal(mynewSVpv(type, cbv->atttyp_len)));
 	XPUSHs(sv_2mortal(mynewSVpv(dflt, len)));
 	if (cbv->attfixed)
-	  XPUSHs(&sv_yes);
+	  XPUSHs(&PL_sv_yes);
 	PUTBACK;
 	perl_call_sv(cbv->attdcl_sv, G_DISCARD);
 
@@ -859,10 +887,10 @@ declaration_end:
 	PUSHMARK(SP);
 	XPUSHs(cbv->self_sv);
 	XPUSHs(sv_2mortal(nmsv));
-	XPUSHs(&sv_undef);
+	XPUSHs(&PL_sv_undef);
 	XPUSHs(sv_2mortal(mynewSVpv(sysid, (cbv->entsys_len - 2))));
 	XPUSHs((pubid ? sv_2mortal(mynewSVpv(pubid, (cbv->entpub_len - 2)))
-		: &sv_undef));
+		: &PL_sv_undef));
 	if (cbv->entnot_len) {
 	  char *notation = &(cbv->doctype_buffer[cbv->entnot_offset]);
 	  XPUSHs(sv_2mortal(mynewSVpv(notation, cbv->entnot_len)));
@@ -941,11 +969,11 @@ doctype_end:
     if (sysid || pubid || intsub)
       XPUSHs(sysid
 	     ? sv_2mortal(mynewSVpv(sysid, (cbv->docsys_len - 2)))
-	     : &sv_undef);
+	     : &PL_sv_undef);
     if (pubid || intsub)
       XPUSHs(pubid
 	     ? sv_2mortal(mynewSVpv(pubid, (cbv->docpub_len - 2)))
-	     : &sv_undef);
+	     : &PL_sv_undef);
     if (intsub)
       XPUSHs(sv_2mortal(mynewSVpv(intsub, cbv->intsub_len)));
     PUTBACK;
@@ -1126,9 +1154,9 @@ unparsedEntityDecl(void *userData,
   PUSHMARK(sp);
   XPUSHs(cbv->self_sv);
   XPUSHs(sv_2mortal(newSVpv((char*) entity, 0)));
-  XPUSHs(base ? sv_2mortal(newSVpv((char*) base, 0)) : &sv_undef);
+  XPUSHs(base ? sv_2mortal(newSVpv((char*) base, 0)) : &PL_sv_undef);
   XPUSHs(sv_2mortal(newSVpv((char*) sysid, 0)));
-  XPUSHs(pubid ? sv_2mortal(newSVpv((char*) pubid, 0)) : &sv_undef);
+  XPUSHs(pubid ? sv_2mortal(newSVpv((char*) pubid, 0)) : &PL_sv_undef);
   XPUSHs(sv_2mortal(newSVpv((char*) notation, 0)));
   PUTBACK;
   perl_call_sv(cbv->unprsd_sv, G_DISCARD);
@@ -1153,7 +1181,7 @@ notationDecl(void *userData,
     }
   else if (sysid || pubid)
     {
-      XPUSHs(&sv_undef);
+      XPUSHs(&PL_sv_undef);
     }
 
   if (sysid)
@@ -1162,7 +1190,7 @@ notationDecl(void *userData,
     }
   else if (pubid)
     {
-      XPUSHs(&sv_undef);
+      XPUSHs(&PL_sv_undef);
     }
   
   if (pubid)
@@ -1191,7 +1219,7 @@ externalEntityRef(XML_Parser parser,
   SAVETMPS ;
   PUSHMARK(sp);
   XPUSHs(cbv->self_sv);
-  XPUSHs(base ? sv_2mortal(newSVpv((char*) base, 0)) : &sv_undef);
+  XPUSHs(base ? sv_2mortal(newSVpv((char*) base, 0)) : &PL_sv_undef);
   XPUSHs(sv_2mortal(newSVpv((char*) sysid, 0)));
   if (pubid)
     XPUSHs(sv_2mortal(newSVpv((char*) pubid, 0)));
@@ -1268,6 +1296,117 @@ externalEntityRef(XML_Parser parser,
   return ret;
 }  /* End externalEntityRef */
 
+/*================================================================
+** This is the function that expat calls to convert multi-byte sequences
+** for external encodings. Each byte in the sequence is used to index
+** into the current map to either set the next map or, in the case of
+** the final byte, to get the corresponding Unicode scalar, which is
+** returned.
+*/
+
+static int
+convert_to_unicode(void *data, const char *seq) {
+  Encinfo *enc = (Encinfo *) data;
+  PrefixMap *curpfx;
+  int count;
+  int index = 0;
+
+  for (count = 0; count < 4; count++) {
+    unsigned char byte = (unsigned char) seq[count];
+    unsigned char bndx;
+    unsigned char bmsk;
+    unsigned int offset;
+
+    curpfx = &enc->prefixes[index];
+    offset = ((int) byte) - curpfx->min;
+    if (offset < 0)
+      break;
+    if (offset >= curpfx->len && curpfx->len != 0)
+      break;
+
+    bndx = byte >> 3;
+    bmsk = 1 << (byte & 0x7);
+
+    if (curpfx->ispfx[bndx] & bmsk) {
+      index = enc->bytemap[curpfx->bmap_start + offset];
+    }
+    else if (curpfx->ischar[bndx] & bmsk) {
+      return enc->bytemap[curpfx->bmap_start + offset];
+    }
+    else
+      break;
+  }
+
+  return -1;
+}  /* End convert_to_unicode */
+
+static int
+unknownEncoding(void *unused, const char *name, XML_Encoding *info)
+{
+  SV ** encinfptr;
+  Encinfo *enc;
+  int namelen;
+  int i;
+  char buff[42];
+
+  namelen = strlen(name);
+  if (namelen > 40)
+    return 0;
+
+  /* Make uppercase */
+  for (i = 0; i < namelen; i++) {
+    char c = name[i];
+    if (c >= 'a' && c <= 'z')
+      c -= 'a' - 'A';
+    buff[i] = c;
+  }
+
+  if (! EncodingTable) {
+    EncodingTable = perl_get_hv("XML::Parser::Expat::Encoding_Table", FALSE);
+    if (! EncodingTable)
+      croak("Can't find XML::Parser::Expat::Encoding_Table");
+  }
+
+  encinfptr = hv_fetch(EncodingTable, buff, namelen, 0);
+
+  if (! encinfptr || ! SvOK(*encinfptr)) {
+    /* Not found, so try to autoload */
+    dSP;
+    int count;
+
+    ENTER;
+    SAVETMPS;
+    PUSHMARK(sp);
+    XPUSHs(sv_2mortal(mynewSVpv(buff,namelen)));
+    PUTBACK;
+    perl_call_pv("XML::Parser::Expat::load_encoding", G_DISCARD);
+    
+    encinfptr = hv_fetch(EncodingTable, buff, namelen, 0);
+    FREETMPS;
+    LEAVE;
+
+    if (! encinfptr || ! SvOK(*encinfptr))
+      return 0;
+  }
+
+  if (! sv_derived_from(*encinfptr, "XML::Parser::Encinfo"))
+    croak("Entry in XML::Parser::Expat::Encoding_Table not an Encinfo object");
+
+  enc = (Encinfo *) SvIV((SV*)SvRV(*encinfptr));
+  Copy(enc->firstmap, info->map, 256, int);
+  info->release = NULL;
+  if (enc->prefixes_size) {
+    info->data = (void *) enc;
+    info->convert = convert_to_unicode;
+  }
+  else {
+    info->data = NULL;
+    info->convert = NULL;
+  }
+
+  return 1;
+}  /* End unknownEncoding */
+
 static void
 check_and_set_default_handler(XML_Parser parser,
 			      CallbackVector *cbv,
@@ -1315,11 +1454,11 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 	int			namespaces
     CODE:
 	{
-	  CallbackVector *cbv = malloc(sizeof(CallbackVector));
+	  CallbackVector *cbv;
 	  char *enc = (char *) (SvTRUE(enc_sv) ? SvPV(enc_sv,na) : 0);
 	  SV ** noexp;
 
-	  memset(cbv, 0, sizeof(CallbackVector));
+	  Newz(0, cbv, 1, CallbackVector);
 	  cbv->self_sv = SvREFCNT_inc(self_sv);
 	  noexp = hv_fetch((HV*)SvRV(cbv->self_sv), "NoExpand", 8, 0);
 	  if (noexp && SvTRUE(*noexp))
@@ -1339,6 +1478,7 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 	  cbv->p = RETVAL;
 	  XML_SetUserData(RETVAL, (void *) cbv);
 	  XML_SetElementHandler(RETVAL, startElement, endElement);
+	  XML_SetUnknownEncodingHandler(RETVAL, unknownEncoding, 0);
 	}
     OUTPUT:
 	RETVAL
@@ -1351,8 +1491,8 @@ XML_ParserFree(parser)
 	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 
 	  if (cbv->doctype_buffer)
-	    free(cbv->doctype_buffer);
-	  free(cbv);
+	    Safefree(cbv->doctype_buffer);
+	  Safefree(cbv);
 	  XML_ParserFree(parser);
 	}
 
@@ -1663,7 +1803,7 @@ XML_PositionContext(parser, lines)
 	char *markbeg, *markend, *limit;
 	int length, relpos;
 	int  cnt;
-	int parsepos = XML_GetCurrentByteIndex(parser);
+	int parsepos = XML_GetCurrentByteIndex(parser) - 1;
 
     PPCODE:
           parsepos -= cbv->offset;
@@ -1731,7 +1871,8 @@ GenerateNSName(name, namespace, table, list)
 	  nsstr = SvPV(namespace, nslen);
 
 	  /* Form a namespace-name string that looks like expat's */
-	  bp = buff = malloc(nmlen + nslen + 2);
+	  New(0, buff, nmlen + nslen + 2, char);
+	  bp = buff;
 	  blim = bp + nslen;
 	  while (bp < blim)
 	    *bp++ = *nsstr++;
@@ -1742,7 +1883,7 @@ GenerateNSName(name, namespace, table, list)
 	  *bp = '\0';
 
 	  RETVAL = gen_ns_name(buff, table, list);
-	  free(buff);
+	  Safefree(buff);
 	}	
     OUTPUT:
 	RETVAL
@@ -1793,3 +1934,101 @@ XML_ErrorString(code)
 	const char *ret = XML_ErrorString(code);
 	ST(0) = sv_newmortal();
 	sv_setpv((SV*)ST(0), ret);
+
+SV *
+XML_LoadEncoding(data, size)
+	char *				data
+	int				size
+    CODE:
+	{
+	  Encmap_Header *emh = (Encmap_Header *) data;
+	  unsigned pfxsize, bmsize;
+
+	  if (size < sizeof(Encmap_Header)
+	      || ntohl(emh->magic) != ENCMAP_MAGIC) {
+	    RETVAL = &PL_sv_undef;
+	  }
+	  else {
+	    Encinfo	*entry;
+	    SV		*sv;
+	    PrefixMap	*pfx;
+	    unsigned short *bm;
+	    int namelen;
+	    int i;
+
+	    pfxsize = ntohs(emh->pfsize);
+	    bmsize  = ntohs(emh->bmsize);
+
+	    if (size != (sizeof(Encmap_Header)
+			 + pfxsize * sizeof(PrefixMap)
+			 + bmsize * sizeof(unsigned short))) {
+	      RETVAL = &PL_sv_undef;
+	    }
+	    else {
+	      /* Convert to uppercase and get name length */
+
+	      for (i = 0; i < sizeof(emh->name); i++) {
+		char c = emh->name[i];
+
+		  if (c == (char) 0)
+		    break;
+
+		if (c >= 'a' && c <= 'z')
+		  emh->name[i] -= 'a' - 'A';
+	      }
+	      namelen = i;
+
+	      RETVAL = mynewSVpv(emh->name, namelen);
+
+	      New(0, entry, 1, Encinfo);
+	      entry->prefixes_size = pfxsize;
+	      entry->bytemap_size  = bmsize;
+	      for (i = 0; i < 256; i++) {
+		entry->firstmap[i] = ntohl(emh->map[i]);
+	      }
+
+	      pfx = (PrefixMap *) &data[sizeof(Encmap_Header)];
+	      bm = (unsigned short *) (((char *) pfx)
+				       + sizeof(PrefixMap) * pfxsize);
+
+	      New(0, entry->prefixes, pfxsize, PrefixMap);
+	      New(0, entry->bytemap, bmsize, unsigned short);
+
+	      for (i = 0; i < pfxsize; i++, pfx++) {
+		PrefixMap *dest = &entry->prefixes[i];
+
+		dest->min = pfx->min;
+		dest->len = pfx->len;
+		dest->bmap_start = ntohs(pfx->bmap_start);
+		Copy(pfx->ispfx, dest->ispfx,
+		     sizeof(pfx->ispfx) + sizeof(pfx->ischar), unsigned char);
+	      }
+
+	      for (i = 0; i < bmsize; i++)
+		entry->bytemap[i] = ntohs(bm[i]);
+
+	      sv = newSViv(0);
+	      sv_setref_pv(sv, "XML::Parser::Encinfo", (void *) entry);
+	  
+	      if (! EncodingTable) {
+		EncodingTable
+		  = perl_get_hv("XML::Parser::Expat::Encoding_Table",
+				FALSE);
+		if (! EncodingTable)
+		  croak("Can't find XML::Parser::Expat::Encoding_Table");
+	      }
+
+	      hv_store(EncodingTable, emh->name, namelen, sv, 0);
+	    }
+	  }
+	}
+    OUTPUT:
+	RETVAL
+
+void
+XML_FreeEncoding(enc)
+	Encinfo *			enc
+    CODE:
+	Safefree(enc->bytemap);
+	Safefree(enc->prefixes);
+	Safefree(enc);

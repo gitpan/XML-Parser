@@ -1,4 +1,4 @@
-			XML::Parser Version 2.16
+			XML::Parser Version 2.17
 
 Copyright (c) 1998 Larry Wall and Clark Cooper.
 All rights reserved.
@@ -8,22 +8,18 @@ under the same terms as Perl itself.
 This is a Perl extension interface to James Clark's XML parser, expat.
 It requires at least version 5.004 of perl. The documentation for this
 extension can be found in pod format at the end of the files Parser.pm
-and Expat/Expat.pm.
+and Expat/Expat.pm. The expat distribution is included in full in
+this distribution in the directory Expat/expat.
 
 This was modified from the original XML::Parser created by Larry Wall.
 
-This is a beta version and there's resistance to making API changes
-at this time, but minor changes may occur as I get feedback
-from the people on the perl-xml mailing list. [You can subscribe to
+This is a beta version and there's resistance to making radical API
+changes at this time, but minor, evolutionary changes may occur as I get
+feedback from the people on the perl-xml mailing list. [You can subscribe to
 this list by sending a message to subscribe-perl-xml@lyris.activestate.com.]
 
-My intention is to post this distribution to CPAN before the end of
-October 1998. Until then, you can get the latest version through:
-
-http://www.netheaven.com/~coopercc/xmlparser/intro.html
-
 To configure this module, cd to the directory that contains this README file
-and type the following.
+and type the following:
 
 	perl Makefile.PL
 
@@ -51,10 +47,11 @@ path, like this (assuming your current directory is samples):
 
 or set your PERLLIB environment variable.
 
-If you have write access to the perl library directories, you may then
+If you have write access to the installation directories, you may then
 install by typing:
 
 	make install
 
 Clark Cooper
-coopercl@sch.ge.com
+  coopercl@sch.ge.com
+  coopercc@netheaven.com

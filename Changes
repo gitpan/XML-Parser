@@ -1,6 +1,30 @@
 Revision history for Perl extension XML::Parser.
 
-2.16
+2.17 Sun Dec 13 17:39:58 EST 1998
+	- Replaced uses of malloc, realloc, and free with New, Renew,
+	  and Safefree respectively
+	- In Expat.pm, fixed methods in_element and within_element to
+	  work correctly with namespaces.
+	- xmlfilter - Substitute quoted equivalents for special characters
+	  in attribute values.
+	- position_in_context was off by one line when position was at
+	  the end of line.
+	- For the context methods in Expat.pm, do the right thing when
+	  the context list is empty.
+	- Added methods xpcroak and xpcarp to Expat.
+	- Alberto Accomazzi <alberto@cfa0.harvard.edu> noted that perl
+	  releases 5.005_5* (the pre 5.006 development versions) won't
+	  accept sv_undef (and related constants) anymore and we have
+	  to switch to PL_sv_...
+	- Alberto also reported a warning in the newer versions of
+	  IO::Handle about input_record_separator not being treated on
+	  a per-handle basis.
+	- Fixed bug that Jon Udell <udell@top.monad.net> reported in
+	  Stream style: Text handler most of the time didn't see proper
+	  context.
+	- Added XML::Parser::Expat::load_encoding function and support
+	  for external encodings.
+2.16 Tue Oct 27 22:27:33 EST 1998
 	- Fixed bug reported by Enno Derksen <enno@att.com>:
           Now treats parameter entity declarations correctly. The entity
 	  handler sees the name beginning with '%' if it's a parameter
