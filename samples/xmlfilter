@@ -1,8 +1,8 @@
 #!/usr/local/bin/perl -w
 #
-# $Revision: 1.5 $
+# $Revision: 1.6 $
 #
-# $Date: 1998/12/26 23:39:10 $
+# $Date: 1999/01/03 16:52:38 $
 
 use XML::Parser;
 
@@ -57,6 +57,8 @@ my %keep_att;
 
 my $always_true = sub {1;};
 my $root_element = '';
+
+my $in_cdata = 0;
 
 # Process options
 
@@ -180,7 +182,7 @@ print "</$root_element>\n"
 
 sub start_handler
 {
-    my $p = shift;
+    my $xp = shift;
     my $el = shift;
 
     unless ($root_element)
@@ -210,8 +212,17 @@ sub start_handler
 	or check_atts($attref, @_))
     {
 	$pass = ! $pass;
-	$p->setHandlers(Char => ($pass ? \&char_handler : 0));
-	push(@togglestack, $p->depth);
+	if ($pass) {
+	  $xp->setHandlers(Char       => \&char_handler,
+			   CdataStart => \&cdata_start,
+			   CdataEnd   => \&cdata_end);
+	}
+	else {
+	  $xp->setHandlers(Char       => 0,
+			   CdataStart => 0,
+			   CdataEnd   => 0);
+	}
+	push(@togglestack, $xp->depth);
     }
 
     if ($pass)
@@ -236,7 +247,7 @@ sub start_handler
 
 sub end_handler
 {
-    my $p = shift;
+    my $xp = shift;
     my $el = shift;
 
     if ($pass)
@@ -244,10 +255,20 @@ sub end_handler
 	print "</$el>";
     }
 
-    if (@togglestack and $togglestack[-1] == $p->depth)
+    if (@togglestack and $togglestack[-1] == $xp->depth)
     {
 	$pass = ! $pass;
-	$p->setHandlers(Char => ($pass ? \&char_handler : 0));
+	if ($pass) {
+	  $xp->setHandlers(Char       => \&char_handler,
+			   CdataStart => \&cdata_start,
+			   CdataEnd   => \&cdata_end);
+	}
+	else {
+	  $xp->setHandlers(Char       => 0,
+			   CdataStart => 0,
+			   CdataEnd   => 0);
+	}
+
 	pop(@togglestack);
     }
 
@@ -256,27 +277,33 @@ sub end_handler
 
 sub char_handler
 {
-    my ($p, $text) = @_;
+    my ($xp, $text) = @_;
 
-    if (length($text) == 0)
-    {
-      print $p->recognized_string;
-    }
+    if (length($text)) {
 
-    if ($text eq '&')
-    {
-	$text = '&amp;';
+      unless ($in_cdata) {
+	$text =~ s/</\&lt;/g;
+	$text =~ s/&/\&amp;/g;
+	$text =~ s/>/\&gt;/g;
+      }
+
+      print $text;
     }
-    elsif ($text eq '<')
-    {
-	$text = '&lt;';
-    }
-    elsif ($text eq '>')
-    {
-	$text = '&gt;';
-    }
-    print $text;
 }  # End char_handler
+
+sub cdata_start {
+  my $xp = shift;
+
+  print '<![CDATA[';
+  $in_cdata = 1;
+}
+
+sub cdata_end {
+  my $xp = shift;
+
+  print ']]>';
+  $in_cdata = 0;
+}
 
 sub check_atts
 {

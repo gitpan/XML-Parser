@@ -18,78 +18,19 @@ James Clark. All Rights Reserved.
 Contributor(s):
 */
 
-#include "xmlparse.h"
-#include "filemap.h"
-#include "codepage.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
-#include <fcntl.h>
 
-#ifdef _MSC_VER
-#include <io.h>
-#endif
-
-#ifdef _POSIX_SOURCE
-#include <unistd.h>
-#endif
-
-#ifndef O_BINARY
-#ifdef _O_BINARY
-#define O_BINARY _O_BINARY
-#else
-#define O_BINARY 0
-#endif
-#endif
+#include "xmlparse.h"
+#include "codepage.h"
+#include "xmlfile.h"
+#include "xmltchar.h"
 
 #ifdef _MSC_VER
 #include <crtdbg.h>
 #endif
-
-#ifdef _DEBUG
-#define READ_SIZE 16
-#else
-#define READ_SIZE (1024*8)
-#endif
-
-#ifdef XML_UNICODE
-#ifndef XML_UNICODE_WCHAR_T
-#error xmlwf requires a 16-bit Unicode-compatible wchar_t 
-#endif
-#define T(x) L ## x
-#define ftprintf fwprintf
-#define tfopen _wfopen
-#define fputts fputws
-#define puttc putwc
-#define tcscmp wcscmp
-#define tcscpy wcscpy
-#define tcscat wcscat
-#define tcschr wcschr
-#define tcsrchr wcsrchr
-#define tcslen wcslen
-#define tperror _wperror
-#define topen _wopen
-#define tmain wmain
-#define tremove _wremove
-#else /* not XML_UNICODE */
-#define T(x) x
-#define ftprintf fprintf
-#define tfopen fopen
-#define fputts fputs
-#define puttc putc
-#define tcscmp strcmp
-#define tcscpy strcpy
-#define tcscat strcat
-#define tcschr strchr
-#define tcsrchr strrchr
-#define tcslen strlen
-#define tperror perror
-#define topen open
-#define tmain main
-#define tremove remove
-#endif /* not XML_UNICODE */
 
 #define NSSEP T('\001')
 
@@ -264,6 +205,22 @@ static void defaultProcessingInstruction(XML_Parser parser, const XML_Char *targ
   XML_DefaultCurrent(parser);
 }
 
+static void nopCharacterData(XML_Parser parser, const XML_Char *s, int len)
+{
+}
+
+static void nopStartElement(XML_Parser parser, const XML_Char *name, const XML_Char **atts)
+{
+}
+
+static void nopEndElement(XML_Parser parser, const XML_Char *name)
+{
+}
+
+static void nopProcessingInstruction(XML_Parser parser, const XML_Char *target, const XML_Char *data)
+{
+}
+
 static void markup(XML_Parser parser, const XML_Char *s, int len)
 {
   FILE *fp = XML_GetUserData(parser);
@@ -282,6 +239,18 @@ void metaLocation(XML_Parser parser)
 	   XML_GetCurrentByteIndex(parser),
 	   XML_GetCurrentLineNumber(parser),
 	   XML_GetCurrentColumnNumber(parser));
+}
+
+static
+void metaStartDocument(XML_Parser parser)
+{
+  fputts(T("<document>\n"), XML_GetUserData(parser));
+}
+
+static
+void metaEndDocument(XML_Parser parser)
+{
+  fputts(T("</document>\n"), XML_GetUserData(parser));
 }
 
 static
@@ -330,6 +299,24 @@ void metaComment(XML_Parser parser, const XML_Char *data)
   fputts(T("<comment data=\""), fp);
   characterData(fp, data, tcslen(data));
   puttc(T('"'), fp);
+  metaLocation(parser);
+  fputts(T("/>\n"), fp);
+}
+
+static
+void metaStartCdataSection(XML_Parser parser)
+{
+  FILE *fp = XML_GetUserData(parser);
+  fputts(T("<startcdata"), fp);
+  metaLocation(parser);
+  fputts(T("/>\n"), fp);
+}
+
+static
+void metaEndCdataSection(XML_Parser parser)
+{
+  FILE *fp = XML_GetUserData(parser);
+  fputts(T("<endcdata"), fp);
   metaLocation(parser);
   fputts(T("/>\n"), fp);
 }
@@ -385,149 +372,6 @@ void metaNotationDecl(XML_Parser parser,
   fputts(T("/>\n"), fp);
 }
 
-typedef struct {
-  XML_Parser parser;
-  int *retPtr;
-} PROCESS_ARGS;
-
-static
-void reportError(XML_Parser parser, const XML_Char *filename)
-{
-  int code = XML_GetErrorCode(parser);
-  const XML_Char *message = XML_ErrorString(code);
-  if (message)
-    ftprintf(stdout, T("%s:%d:%ld: %s\n"),
-	     filename,
-	     XML_GetErrorLineNumber(parser),
-	     XML_GetErrorColumnNumber(parser),
-	     message);
-  else
-    ftprintf(stderr, T("%s: (unknown message %d)\n"), filename, code);
-}
-
-static
-void processFile(const void *data, size_t size, const XML_Char *filename, void *args)
-{
-  XML_Parser parser = ((PROCESS_ARGS *)args)->parser;
-  int *retPtr = ((PROCESS_ARGS *)args)->retPtr;
-  if (!XML_Parse(parser, data, size, 1)) {
-    reportError(parser, filename);
-    *retPtr = 0;
-  }
-  else
-    *retPtr = 1;
-}
-
-static
-int isAsciiLetter(XML_Char c)
-{
-  return (T('a') <= c && c <= T('z')) || (T('A') <= c && c <= T('Z'));
-}
-
-static
-const XML_Char *resolveSystemId(const XML_Char *base, const XML_Char *systemId, XML_Char **toFree)
-{
-  XML_Char *s;
-  *toFree = 0;
-  if (!base
-      || *systemId == T('/')
-#ifdef WIN32
-      || *systemId == T('\\')
-      || (isAsciiLetter(systemId[0]) && systemId[1] == T(':'))
-#endif
-     )
-    return systemId;
-  *toFree = (XML_Char *)malloc((tcslen(base) + tcslen(systemId) + 2)*sizeof(XML_Char));
-  if (!*toFree)
-    return systemId;
-  tcscpy(*toFree, base);
-  s = *toFree;
-  if (tcsrchr(s, T('/')))
-    s = tcsrchr(s, T('/')) + 1;
-#ifdef WIN32
-  if (tcsrchr(s, T('\\')))
-    s = tcsrchr(s, T('\\')) + 1;
-#endif
-  tcscpy(s, systemId);
-  return *toFree;
-}
-
-static
-int externalEntityRefFilemap(XML_Parser parser,
-			     const XML_Char *context,
-			     const XML_Char *base,
-			     const XML_Char *systemId,
-			     const XML_Char *publicId)
-{
-  int result;
-  XML_Char *s;
-  const XML_Char *filename;
-  XML_Parser entParser = XML_ExternalEntityParserCreate(parser, context, 0);
-  PROCESS_ARGS args;
-  args.retPtr = &result;
-  args.parser = entParser;
-  filename = resolveSystemId(base, systemId, &s);
-  XML_SetBase(entParser, filename);
-  if (!filemap(filename, processFile, &args))
-    result = 0;
-  free(s);
-  XML_ParserFree(entParser);
-  return result;
-}
-
-static
-int processStream(const XML_Char *filename, XML_Parser parser)
-{
-  int fd = topen(filename, O_BINARY|O_RDONLY);
-  if (fd < 0) {
-    tperror(filename);
-    return 0;
-  }
-  for (;;) {
-    int nread;
-    char *buf = XML_GetBuffer(parser, READ_SIZE);
-    if (!buf) {
-      close(fd);
-      ftprintf(stderr, T("%s: out of memory\n"), filename);
-      return 0;
-    }
-    nread = read(fd, buf, READ_SIZE);
-    if (nread < 0) {
-      tperror(filename);
-      close(fd);
-      return 0;
-    }
-    if (!XML_ParseBuffer(parser, nread, nread == 0)) {
-      reportError(parser, filename);
-      close(fd);
-      return 0;
-    }
-    if (nread == 0) {
-      close(fd);
-      break;;
-    }
-  }
-  return 1;
-}
-
-static
-int externalEntityRefStream(XML_Parser parser,
-			    const XML_Char *context,
-			    const XML_Char *base,
-			    const XML_Char *systemId,
-			    const XML_Char *publicId)
-{
-  XML_Char *s;
-  const XML_Char *filename;
-  int ret;
-  XML_Parser entParser = XML_ExternalEntityParserCreate(parser, context, 0);
-  filename = resolveSystemId(base, systemId, &s);
-  XML_SetBase(entParser, filename);
-  ret = processStream(filename, entParser);
-  free(s);
-  XML_ParserFree(entParser);
-  return ret;
-}
 
 static
 int unknownEncodingConvert(void *data, const char *p)
@@ -585,8 +429,7 @@ int tmain(int argc, XML_Char **argv)
   int i;
   const XML_Char *outputDir = 0;
   const XML_Char *encoding = 0;
-  int useFilemap = 1;
-  int processExternalEntities = 0;
+  unsigned processFlags = XML_MAP_FILE;
   int windowsCodePages = 0;
   int outputType = 0;
   int useNamespaces = 0;
@@ -604,7 +447,7 @@ int tmain(int argc, XML_Char **argv)
     }
     j = 1;
     if (argv[i][j] == T('r')) {
-      useFilemap = 0;
+      processFlags &= ~XML_MAP_FILE;
       j++;
     }
     if (argv[i][j] == T('n')) {
@@ -613,7 +456,7 @@ int tmain(int argc, XML_Char **argv)
       j++;
     }
     if (argv[i][j] == T('x')) {
-      processExternalEntities = 1;
+      processFlags |= XML_EXTERNAL_ENTITIES;
       j++;
     }
     if (argv[i][j] == T('w')) {
@@ -628,6 +471,10 @@ int tmain(int argc, XML_Char **argv)
     if (argv[i][j] == T('c')) {
       outputType = 'c';
       useNamespaces = 0;
+      j++;
+    }
+    if (argv[i][j] == T('t')) {
+      outputType = 't';
       j++;
     }
     if (argv[i][j] == T('d')) {
@@ -691,13 +538,14 @@ int tmain(int argc, XML_Char **argv)
       switch (outputType) {
       case 'm':
 	XML_UseParserAsHandlerArg(parser);
-	fputts(T("<document>\n"), fp);
 	XML_SetElementHandler(parser, metaStartElement, metaEndElement);
 	XML_SetProcessingInstructionHandler(parser, metaProcessingInstruction);
 	XML_SetCommentHandler(parser, metaComment);
+	XML_SetCdataSectionHandler(parser, metaStartCdataSection, metaEndCdataSection);
 	XML_SetCharacterDataHandler(parser, metaCharacterData);
 	XML_SetUnparsedEntityDeclHandler(parser, metaUnparsedEntityDecl);
 	XML_SetNotationDeclHandler(parser, metaNotationDecl);
+	metaStartDocument(parser);
 	break;
       case 'c':
 	XML_UseParserAsHandlerArg(parser);
@@ -705,6 +553,13 @@ int tmain(int argc, XML_Char **argv)
 	XML_SetElementHandler(parser, defaultStartElement, defaultEndElement);
 	XML_SetCharacterDataHandler(parser, defaultCharacterData);
 	XML_SetProcessingInstructionHandler(parser, defaultProcessingInstruction);
+	break;
+      case 't':
+	/* This is for doing timings; this gives a more realistic estimate of
+	   the parsing time. */
+	XML_SetElementHandler(parser, nopStartElement, nopEndElement);
+	XML_SetCharacterDataHandler(parser, nopCharacterData);
+	XML_SetProcessingInstructionHandler(parser, nopProcessingInstruction);
 	break;
       default:
 	if (useNamespaces)
@@ -718,27 +573,10 @@ int tmain(int argc, XML_Char **argv)
     }
     if (windowsCodePages)
       XML_SetUnknownEncodingHandler(parser, unknownEncoding, 0);
-    if (!XML_SetBase(parser, argv[i])) {
-      ftprintf(stderr, T("%s: out of memory"), argv[0]);
-      exit(1);
-    }
-    if (processExternalEntities)
-      XML_SetExternalEntityRefHandler(parser,
-	                              useFilemap
-				      ? externalEntityRefFilemap
-				      : externalEntityRefStream);
-    if (useFilemap) {
-      PROCESS_ARGS args;
-      args.retPtr = &result;
-      args.parser = parser;
-      if (!filemap(argv[i], processFile, &args))
-	result = 0;
-    }
-    else
-      result = processStream(argv[i], parser);
+    result = XML_ProcessFile(parser, argv[i], processFlags);
     if (outputDir) {
       if (outputType == 'm')
-	fputts(T("</document>\n"), fp);
+	metaEndDocument(parser);
       fclose(fp);
       if (!result)
 	tremove(outName);

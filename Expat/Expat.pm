@@ -12,7 +12,7 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.18" ;
+$VERSION = "2.19" ;
 
 %Encoding_Table = ();
 @Encoding_Path = (grep(-d $_, map($_ . '/XML/Parser/Encodings', @INC)), '.');
@@ -25,6 +25,8 @@ bootstrap XML::Parser::Expat $VERSION;
 		    Char  => \&SetCharacterDataHandler,
 		    Proc  => \&SetProcessingInstructionHandler,
 		    Comment => \&SetCommentHandler,
+		    CdataStart => \&SetStartCdataHandler,
+		    CdataEnd   => \&SetEndCdataHandler,
 		    Default => \&SetDefaultHandler,
 		    Unparsed => \&SetUnparsedEntityDeclHandler,
 		    Notation => \&SetNotationDeclHandler,
@@ -131,6 +133,11 @@ sub default_current {
 sub recognized_string {
   my $self = shift;
   RecognizedString($self->{Parser});
+}
+
+sub original_string {
+  my $self = shift;
+  OriginalString($self->{Parser});
 }
 
 sub current_line {
@@ -442,6 +449,14 @@ This event is generated when a processing instruction is recognized.
 
 This event is generated when a comment is recognized.
 
+=item * CdataStart	(Parser)
+
+This is called at the start of a CDATA section.
+
+=item * CdataEnd	(Parser)
+
+This is called at the end of a CDATA section.
+
 =item * Default		(Parser, String)
 
 This is called for any characters that don't have a registered handler.
@@ -560,6 +575,12 @@ a prefix.
 Returns the string from the document that was recognized in order to call
 the current handler. For instance, when called from a start handler, it
 will give us the the start-tag string. The string is encoded in UTF-8.
+
+=item original_string
+
+Returns the verbatim string from the document that was recognized in
+order to call the current handler. The string is in the original document
+encoding.
 
 =item default_current
 

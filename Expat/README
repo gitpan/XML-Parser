@@ -1,0 +1,19 @@
+
+This module is built on top of the expat C library written by
+James Clark <jjc@jclark.com>. The complete expat distribution is contained
+in the expat sub-directory. You may find out the version by reading
+expat/expat.html.
+
+If the file expat.patches in this sub-directory is non-empty, then I
+have made local patches to this library. If there are patches, then
+for each file that has been patched, there will be a corresponding file
+with the same name but with an extra ".orig" suffix, that is the original
+file.
+
+The expat.patches file will contain the differences from the original to
+my patched version. Using the patch facility, you could get to my patched
+version from James Clark's original by applying expat.patches to the original.
+
+If you are going to use this library outside of XML::Parser, then you
+should stick with the original. To do this, just move each .orig file
+to it's basename.

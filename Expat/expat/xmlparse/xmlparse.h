@@ -107,6 +107,9 @@ typedef void (*XML_ProcessingInstructionHandler)(void *userData,
 /* data is 0 terminated */
 typedef void (*XML_CommentHandler)(void *userData, const XML_Char *data);
 
+typedef void (*XML_StartCdataSectionHandler)(void *userData);
+typedef void (*XML_EndCdataSectionHandler)(void *userData);
+
 /* This is called for any characters in the XML document for
 which there is no applicable handler.  This includes both
 characters that are part of markup which is of a kind that is
@@ -255,6 +258,11 @@ void XMLPARSEAPI
 XML_SetCommentHandler(XML_Parser parser,
                       XML_CommentHandler handler);
 
+void XMLPARSEAPI
+XML_SetCdataSectionHandler(XML_Parser parser,
+			   XML_StartCdataSectionHandler start,
+			   XML_EndCdataSectionHandler end);
+
 /* This sets the default handler and also inhibits expansion of internal entities.
 The entity reference will be passed to the default handler. */
 
@@ -281,6 +289,12 @@ void XMLPARSEAPI
 XML_SetExternalEntityRefHandler(XML_Parser parser,
 				XML_ExternalEntityRefHandler handler);
 
+/* If a non-null value for arg is specified here, then it will be passed
+as the first argument to the external entity ref handler instead
+of the parser object. */
+void XMLPARSEAPI
+XML_SetExternalEntityRefHandlerArg(XML_Parser, void *arg);
+
 void XMLPARSEAPI
 XML_SetUnknownEncodingHandler(XML_Parser parser,
 			      XML_UnknownEncodingHandler handler,
@@ -297,6 +311,13 @@ XML_SetUserData(XML_Parser parser, void *userData);
 
 /* Returns the last value set by XML_SetUserData or null. */
 #define XML_GetUserData(parser) (*(void **)(parser))
+
+/* This is equivalent to supplying an encoding argument
+to XML_CreateParser. It must not be called before XML_Parse
+or XML_ParseBuffer. */
+
+int XMLPARSEAPI
+XML_SetEncoding(XML_Parser parser, const XML_Char *encoding);
 
 /* If this function is called, then the parser will be passed
 as the first argument to callbacks instead of userData.
@@ -389,6 +410,7 @@ of the sequence of characters that generated the event. */
 int XMLPARSEAPI XML_GetCurrentLineNumber(XML_Parser parser);
 int XMLPARSEAPI XML_GetCurrentColumnNumber(XML_Parser parser);
 long XMLPARSEAPI XML_GetCurrentByteIndex(XML_Parser parser);
+long XMLPARSEAPI XML_GetCurrentByteLimit(XML_Parser parser);
 
 /* For backwards compatibility with previous versions. */
 #define XML_GetErrorLineNumber XML_GetCurrentLineNumber

@@ -18,11 +18,8 @@ James Clark. All Rights Reserved.
 Contributor(s):
 */
 
-#include <stdlib.h>
-#include <string.h>
-#include <stddef.h>
-
 #include "xmldef.h"
+#include "xmlparse.h"
 
 #ifdef XML_UNICODE
 #define XML_ENCODE_MAX XML_UTF16_ENCODE_MAX
@@ -43,7 +40,7 @@ typedef char ICHAR;
 #endif
 
 
-#ifndef XMLNS
+#ifndef XML_NS
 
 #define XmlInitEncodingNS XmlInitEncoding
 #define XmlInitUnknownEncodingNS XmlInitUnknownEncoding
@@ -63,7 +60,6 @@ typedef char ICHAR;
 /* Round up n to be a multiple of sz, where sz is a power of 2. */
 #define ROUND_UP(n, sz) (((n) + ((sz) - 1)) & ~((sz) - 1))
 
-#include "xmlparse.h"
 #include "xmltok.h"
 #include "xmlrole.h"
 #include "hashtable.h"
@@ -268,10 +264,13 @@ typedef struct {
   XML_CharacterDataHandler characterDataHandler;
   XML_ProcessingInstructionHandler processingInstructionHandler;
   XML_CommentHandler commentHandler;
+  XML_StartCdataSectionHandler startCdataSectionHandler;
+  XML_EndCdataSectionHandler endCdataSectionHandler;
   XML_DefaultHandler defaultHandler;
   XML_UnparsedEntityDeclHandler unparsedEntityDeclHandler;
   XML_NotationDeclHandler notationDeclHandler;
   XML_ExternalEntityRefHandler externalEntityRefHandler;
+  void *externalEntityRefHandlerArg;
   XML_UnknownEncodingHandler unknownEncodingHandler;
   const ENCODING *encoding;
   INIT_ENCODING initEncoding;
@@ -319,10 +318,13 @@ typedef struct {
 #define characterDataHandler (((Parser *)parser)->characterDataHandler)
 #define processingInstructionHandler (((Parser *)parser)->processingInstructionHandler)
 #define commentHandler (((Parser *)parser)->commentHandler)
+#define startCdataSectionHandler (((Parser *)parser)->startCdataSectionHandler)
+#define endCdataSectionHandler (((Parser *)parser)->endCdataSectionHandler)
 #define defaultHandler (((Parser *)parser)->defaultHandler)
 #define unparsedEntityDeclHandler (((Parser *)parser)->unparsedEntityDeclHandler)
 #define notationDeclHandler (((Parser *)parser)->notationDeclHandler)
 #define externalEntityRefHandler (((Parser *)parser)->externalEntityRefHandler)
+#define externalEntityRefHandlerArg (((Parser *)parser)->externalEntityRefHandlerArg)
 #define unknownEncodingHandler (((Parser *)parser)->unknownEncodingHandler)
 #define encoding (((Parser *)parser)->encoding)
 #define initEncoding (((Parser *)parser)->initEncoding)
@@ -371,6 +373,15 @@ typedef struct {
 #define hadExternalDoctype (((Parser *)parser)->hadExternalDoctype)
 #define namespaceSeparator (((Parser *)parser)->namespaceSeparator)
 
+#ifdef _MSC_VER
+#ifdef _DEBUG
+Parser *asParser(XML_Parser parser)
+{
+  return parser;
+}
+#endif
+#endif
+
 XML_Parser XML_ParserCreate(const XML_Char *encodingName)
 {
   XML_Parser parser = malloc(sizeof(Parser));
@@ -385,10 +396,13 @@ XML_Parser XML_ParserCreate(const XML_Char *encodingName)
   characterDataHandler = 0;
   processingInstructionHandler = 0;
   commentHandler = 0;
+  startCdataSectionHandler = 0;
+  endCdataSectionHandler = 0;
   defaultHandler = 0;
   unparsedEntityDeclHandler = 0;
   notationDeclHandler = 0;
   externalEntityRefHandler = 0;
+  externalEntityRefHandlerArg = parser;
   unknownEncodingHandler = 0;
   buffer = 0;
   bufferPtr = 0;
@@ -466,6 +480,18 @@ XML_Parser XML_ParserCreateNS(const XML_Char *encodingName, XML_Char nsSep)
   return parser;
 }
 
+int XML_SetEncoding(XML_Parser parser, const XML_Char *encodingName)
+{
+  if (!encodingName)
+    protocolEncodingName = 0;
+  else {
+    protocolEncodingName = poolCopyString(&tempPool, encodingName);
+    if (!protocolEncodingName)
+      return 0;
+  }
+  return 1;
+}
+
 XML_Parser XML_ExternalEntityParserCreate(XML_Parser oldParser,
 					  const XML_Char *context,
 					  const XML_Char *encodingName)
@@ -477,12 +503,15 @@ XML_Parser XML_ExternalEntityParserCreate(XML_Parser oldParser,
   XML_CharacterDataHandler oldCharacterDataHandler = characterDataHandler;
   XML_ProcessingInstructionHandler oldProcessingInstructionHandler = processingInstructionHandler;
   XML_CommentHandler oldCommentHandler = commentHandler;
+  XML_StartCdataSectionHandler oldStartCdataSectionHandler = startCdataSectionHandler;
+  XML_EndCdataSectionHandler oldEndCdataSectionHandler = endCdataSectionHandler;
   XML_DefaultHandler oldDefaultHandler = defaultHandler;
   XML_ExternalEntityRefHandler oldExternalEntityRefHandler = externalEntityRefHandler;
   XML_UnknownEncodingHandler oldUnknownEncodingHandler = unknownEncodingHandler;
   void *oldUserData = userData;
   void *oldHandlerArg = handlerArg;
   int oldDefaultExpandInternalEntities = defaultExpandInternalEntities;
+  void *oldExternalEntityRefHandlerArg = externalEntityRefHandlerArg;
  
   parser = (ns
             ? XML_ParserCreateNS(encodingName, namespaceSeparator)
@@ -494,6 +523,8 @@ XML_Parser XML_ExternalEntityParserCreate(XML_Parser oldParser,
   characterDataHandler = oldCharacterDataHandler;
   processingInstructionHandler = oldProcessingInstructionHandler;
   commentHandler = oldCommentHandler;
+  startCdataSectionHandler = oldStartCdataSectionHandler;
+  endCdataSectionHandler = oldEndCdataSectionHandler;
   defaultHandler = oldDefaultHandler;
   externalEntityRefHandler = oldExternalEntityRefHandler;
   unknownEncodingHandler = oldUnknownEncodingHandler;
@@ -502,6 +533,8 @@ XML_Parser XML_ExternalEntityParserCreate(XML_Parser oldParser,
     handlerArg = userData;
   else
     handlerArg = parser;
+  if (oldExternalEntityRefHandlerArg != oldParser)
+    externalEntityRefHandlerArg = oldExternalEntityRefHandlerArg;
   defaultExpandInternalEntities = oldDefaultExpandInternalEntities;
   if (!dtdCopy(&dtd, oldDtd) || !setContext(parser, context)) {
     XML_ParserFree(parser);
@@ -612,6 +645,14 @@ void XML_SetCommentHandler(XML_Parser parser,
   commentHandler = handler;
 }
 
+void XML_SetCdataSectionHandler(XML_Parser parser,
+				XML_StartCdataSectionHandler start,
+			        XML_EndCdataSectionHandler end)
+{
+  startCdataSectionHandler = start;
+  endCdataSectionHandler = end;
+}
+
 void XML_SetDefaultHandler(XML_Parser parser,
 			   XML_DefaultHandler handler)
 {
@@ -642,6 +683,14 @@ void XML_SetExternalEntityRefHandler(XML_Parser parser,
 				     XML_ExternalEntityRefHandler handler)
 {
   externalEntityRefHandler = handler;
+}
+
+void XML_SetExternalEntityRefHandlerArg(XML_Parser parser, void *arg)
+{
+  if (arg)
+    externalEntityRefHandlerArg = arg;
+  else
+    externalEntityRefHandlerArg = parser;
 }
 
 void XML_SetUnknownEncodingHandler(XML_Parser parser,
@@ -768,6 +817,13 @@ long XML_GetCurrentByteIndex(XML_Parser parser)
 {
   if (eventPtr)
     return parseEndByteIndex - (parseEndPtr - eventPtr);
+  return -1;
+}
+
+long XML_GetCurrentByteLimit(XML_Parser parser)
+{
+  if (eventPtr)
+    return parseEndByteIndex - (parseEndPtr - eventEndPtr);
   return -1;
 }
 
@@ -1064,7 +1120,11 @@ doContent(XML_Parser parser,
 	    entity->open = 0;
 	    if (!context)
 	      return XML_ERROR_NO_MEMORY;
-	    if (!externalEntityRefHandler(parser, context, dtd.base, entity->systemId, entity->publicId))
+	    if (!externalEntityRefHandler(externalEntityRefHandlerArg,
+				          context,
+					  dtd.base,
+					  entity->systemId,
+					  entity->publicId))
 	      return XML_ERROR_EXTERNAL_ENTITY_HANDLING;
 	    poolDiscard(&tempPool);
 	  }
@@ -1255,8 +1315,23 @@ doContent(XML_Parser parser,
     case XML_TOK_CDATA_SECT_OPEN:
       {
 	enum XML_Error result;
-	if (characterDataHandler)
+	if (startCdataSectionHandler)
+  	  startCdataSectionHandler(handlerArg);
+#if 0
+	/* Suppose you doing a transformation on a document that involves
+	   changing only the character data.  You set up a defaultHandler
+	   and a characterDataHandler.  The defaultHandler simply copies
+	   characters through.  The characterDataHandler does the transformation
+	   and writes the characters out escaping them as necessary.  This case
+	   will fail to work if we leave out the following two lines (because &
+	   and < inside CDATA sections will be incorrectly escaped).
+
+	   However, now we have a start/endCdataSectionHandler, so it seems
+	   easier to let the user deal with this. */
+
+	else if (characterDataHandler)
   	  characterDataHandler(handlerArg, dataBuf, 0);
+#endif
 	else if (defaultHandler)
 	  reportDefault(parser, enc, s, next);
 	result = doCdataSection(parser, enc, &next, end, nextPtr);
@@ -1614,8 +1689,13 @@ enum XML_Error doCdataSection(XML_Parser parser,
     *eventEndPP = next;
     switch (tok) {
     case XML_TOK_CDATA_SECT_CLOSE:
-      if (characterDataHandler)
+      if (endCdataSectionHandler)
+	endCdataSectionHandler(handlerArg);
+#if 0
+      /* see comment under XML_TOK_CDATA_SECT_OPEN */
+      else if (characterDataHandler)
 	characterDataHandler(handlerArg, dataBuf, 0);
+#endif
       else if (defaultHandler)
 	reportDefault(parser, enc, s, next);
       *startPtr = next;

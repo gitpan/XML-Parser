@@ -2,8 +2,10 @@ Changes				Change log
 Expat/Expat.pm			XML::Parser::Expat module
 Expat/Expat.xs			Extension library
 Expat/Makefile.PL		perl MakeMaker script for XML::Parser::Expat
+Expat/README			comments about expat library
 Expat/encoding.h		Header file; describes *.enc structure
 Expat/typemap			XS typemap
+Expat/expat.patches		expat patches (may be empty)
 Expat/expat/MPL-1_0.html
 Expat/expat/Makefile
 Expat/expat/bin/xmlparse.dll
@@ -67,6 +69,7 @@ samples/xmlcomments		A utility to extract comments
 samples/xmlfilter		A utility to filter elements
 samples/xmlstats		A utility to report on element statistics
 t/astress.t			Test script
+t/cdata.t			Test script
 t/decl.t			Test script
 t/encoding.t			Test script
 t/external_ent.t		Test script

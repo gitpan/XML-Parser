@@ -1,6 +1,25 @@
 Revision history for Perl extension XML::Parser.
 
-2.18
+2.19 Sun Jan  3 11:23:45 EST 1999
+	- When the recognized string is long enough, expat uses multiple
+	  calls to reportDefault. Fixed recString handler in Expat.xs to
+	  deal with this properly.
+	- Added original_string method to Expat. This returns the untranslated
+	  string (i.e. original encoding) that caused current event.
+	- Alberto Accomazzi <alberto@cfa0.harvard.edu> sent in more patches
+	  for perl5.005_54 incompatibilities.
+	- Alberto also fingered a nasty memory bug in Expat.xs that arose
+	  sometimes when you registered a declaration handler but no
+	  default handler. It would give you a "Not a CODE reference"
+	  error in a place that wasn't using any CODE references.
+	- <schinder@pobox.com> reported a problem with compiling expat
+	  on a Sun 4 due to non-exsitance of memmove on that OS. Provided
+	  a workaround in Makefile.PL
+	- Now using expat Version 19981231 from James Clark's test directory.
+	- Made patch to this version in order to support original_string
+	  (see Expat/expat.patches.)
+	- Added CdataStart and CdataEnd handlers to expat.
+2.18 Sun Dec 27 07:39:23 EST 1998
 	- Alberto Accomazzi <alberto@cfa0.harvard.edu> pointed out that
 	  the DESTROY sub in the new XML::Parser::Encinfo package was
 	  pointing to the wrong package for calling FreeEncoding.

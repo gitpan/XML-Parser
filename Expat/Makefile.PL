@@ -2,6 +2,20 @@ use ExtUtils::MakeMaker;
 use Config;
 use English;
 
+sub MY::postamble {
+  my $self = shift;
+  my $ret = '';
+
+  unless ($Config{d_memmove}) {
+    $ret = "expat/xmlparse/xmlparse.o:\n\t";
+    $ret .= '$(CCCMD) $(CCCDLFLAGS) -I$(PERL_INC) ';
+    $ret .= '-D"memmove(d,s,l)=bcopy(s,d,l)" $(DEFINE) ';
+    $ret .= 'expat/xmlparse/xmlparse.c';
+  }
+
+  $ret;
+}
+
 $define = '';
 
 $define .= ($Config{cc} =~ /cl\.exe/i) ? '/Fo$@' : '-o $@';
@@ -18,7 +32,7 @@ push(@extras,
 
 push(@extras,
      ABSTRACT => "Lowlevel access to James Clark's expat XML parser",
-     AUTHOR        => 'Clark Cooper (coopercl@sch.ge.com)')
+     AUTHOR        => 'Clark Cooper (coopercc@netheaven.com)')
     if ($ExtUtils::MakeMaker::Version >= 5.4301);
      
 WriteMakefile(

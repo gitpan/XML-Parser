@@ -129,6 +129,13 @@ int utf8_isInvalid4(const ENCODING *enc, const char *p)
 struct normal_encoding {
   ENCODING enc;
   unsigned char type[256];
+#ifdef XML_MIN_SIZE
+  int (*byteType)(const ENCODING *, const char *);
+  int (*isNameMin)(const ENCODING *, const char *);
+  int (*isNmstrtMin)(const ENCODING *, const char *);
+  int (*byteToAscii)(const ENCODING *, const char *);
+  int (*charMatches)(const ENCODING *, const char *, int);
+#endif /* XML_MIN_SIZE */
   int (*isName2)(const ENCODING *, const char *);
   int (*isName3)(const ENCODING *, const char *);
   int (*isName4)(const ENCODING *, const char *);
@@ -140,6 +147,21 @@ struct normal_encoding {
   int (*isInvalid4)(const ENCODING *, const char *);
 };
 
+#ifdef XML_MIN_SIZE
+
+#define STANDARD_VTABLE(E) \
+ E ## byteType, \
+ E ## isNameMin, \
+ E ## isNmstrtMin, \
+ E ## byteToAscii, \
+ E ## charMatches,
+
+#else
+
+#define STANDARD_VTABLE(E) /* as nothing */
+
+#endif
+
 #define NORMAL_VTABLE(E) \
  E ## isName2, \
  E ## isName3, \
@@ -150,16 +172,49 @@ struct normal_encoding {
  E ## isInvalid2, \
  E ## isInvalid3, \
  E ## isInvalid4
- 
+
 static int checkCharRefNumber(int);
 
 #include "xmltok_impl.h"
 
+#ifdef XML_MIN_SIZE
+#define sb_isNameMin isNever
+#define sb_isNmstrtMin isNever
+#endif
+
+#ifdef XML_MIN_SIZE
+#define MINBPC(enc) ((enc)->minBytesPerChar)
+#else
 /* minimum bytes per character */
 #define MINBPC(enc) 1
-#define BYTE_TYPE(enc, p) \
+#endif
+
+#define SB_BYTE_TYPE(enc, p) \
   (((struct normal_encoding *)(enc))->type[(unsigned char)*(p)])
+
+#ifdef XML_MIN_SIZE
+static
+int sb_byteType(const ENCODING *enc, const char *p)
+{
+  return SB_BYTE_TYPE(enc, p);
+}
+#define BYTE_TYPE(enc, p) \
+ (((const struct normal_encoding *)(enc))->byteType(enc, p))
+#else
+#define BYTE_TYPE(enc, p) SB_BYTE_TYPE(enc, p)
+#endif
+
+#ifdef XML_MIN_SIZE
+#define BYTE_TO_ASCII(enc, p) \
+ (((const struct normal_encoding *)(enc))->byteToAscii(enc, p))
+static
+int sb_byteToAscii(const ENCODING *enc, const char *p)
+{
+  return *p;
+}
+#else
 #define BYTE_TO_ASCII(enc, p) (*p)
+#endif
 
 #define IS_NAME_CHAR(enc, p, n) \
  (((const struct normal_encoding *)(enc))->isName ## n(enc, p))
@@ -168,11 +223,28 @@ static int checkCharRefNumber(int);
 #define IS_INVALID_CHAR(enc, p, n) \
  (((const struct normal_encoding *)(enc))->isInvalid ## n(enc, p))
 
+#ifdef XML_MIN_SIZE
+#define IS_NAME_CHAR_MINBPC(enc, p) \
+ (((const struct normal_encoding *)(enc))->isNameMin(enc, p))
+#define IS_NMSTRT_CHAR_MINBPC(enc, p) \
+ (((const struct normal_encoding *)(enc))->isNmstrtMin(enc, p))
+#else
 #define IS_NAME_CHAR_MINBPC(enc, p) (0)
 #define IS_NMSTRT_CHAR_MINBPC(enc, p) (0)
+#endif
 
+#ifdef XML_MIN_SIZE
+#define CHAR_MATCHES(enc, p, c) \
+ (((const struct normal_encoding *)(enc))->charMatches(enc, p, c))
+static
+int sb_charMatches(const ENCODING *enc, const char *p, int c)
+{
+  return *p == c;
+}
+#else
 /* c is an ASCII character */
 #define CHAR_MATCHES(enc, p, c) (*(p) == c)
+#endif
 
 #define PREFIX(ident) normal_ ## ident
 #include "xmltok_impl.c"
@@ -252,14 +324,14 @@ void utf8_toUtf16(const ENCODING *enc,
   *toP = to;
 }
 
-#ifdef XMLNS
+#ifdef XML_NS
 static const struct normal_encoding utf8_encoding_ns = {
   { VTABLE1, utf8_toUtf8, utf8_toUtf16, 1, 1, 0 },
   {
 #include "asciitab.h"
 #include "utf8tab.h"
   },
-  NORMAL_VTABLE(utf8_)
+  STANDARD_VTABLE(sb_) NORMAL_VTABLE(utf8_)
 };
 #endif
 
@@ -271,10 +343,10 @@ static const struct normal_encoding utf8_encoding = {
 #undef BT_COLON
 #include "utf8tab.h"
   },
-  NORMAL_VTABLE(utf8_)
+  STANDARD_VTABLE(sb_) NORMAL_VTABLE(utf8_)
 };
 
-#ifdef XMLNS
+#ifdef XML_NS
 
 static const struct normal_encoding internal_utf8_encoding_ns = {
   { VTABLE1, utf8_toUtf8, utf8_toUtf16, 1, 1, 0 },
@@ -282,7 +354,7 @@ static const struct normal_encoding internal_utf8_encoding_ns = {
 #include "iasciitab.h"
 #include "utf8tab.h"
   },
-  NORMAL_VTABLE(utf8_)
+  STANDARD_VTABLE(sb_) NORMAL_VTABLE(utf8_)
 };
 
 #endif
@@ -295,7 +367,7 @@ static const struct normal_encoding internal_utf8_encoding = {
 #undef BT_COLON
 #include "utf8tab.h"
   },
-  NORMAL_VTABLE(utf8_)
+  STANDARD_VTABLE(sb_) NORMAL_VTABLE(utf8_)
 };
 
 static
@@ -332,14 +404,15 @@ void latin1_toUtf16(const ENCODING *enc,
     *(*toP)++ = (unsigned char)*(*fromP)++;
 }
 
-#ifdef XMLNS
+#ifdef XML_NS
 
 static const struct normal_encoding latin1_encoding_ns = {
   { VTABLE1, latin1_toUtf8, latin1_toUtf16, 1, 0, 0 },
   {
 #include "asciitab.h"
 #include "latin1tab.h"
-  }
+  },
+  STANDARD_VTABLE(sb_)
 };
 
 #endif
@@ -351,7 +424,8 @@ static const struct normal_encoding latin1_encoding = {
 #include "asciitab.h"
 #undef BT_COLON
 #include "latin1tab.h"
-  }
+  },
+  STANDARD_VTABLE(sb_)
 };
 
 static
@@ -363,14 +437,15 @@ void ascii_toUtf8(const ENCODING *enc,
     *(*toP)++ = *(*fromP)++;
 }
 
-#ifdef XMLNS
+#ifdef XML_NS
 
 static const struct normal_encoding ascii_encoding_ns = {
   { VTABLE1, ascii_toUtf8, latin1_toUtf16, 1, 1, 0 },
   {
 #include "asciitab.h"
 /* BT_NONXML == 0 */
-  }
+  },
+  STANDARD_VTABLE(sb_)
 };
 
 #endif
@@ -382,10 +457,9 @@ static const struct normal_encoding ascii_encoding = {
 #include "asciitab.h"
 #undef BT_COLON
 /* BT_NONXML == 0 */
-  }
+  },
+  STANDARD_VTABLE(sb_)
 };
-
-#undef PREFIX
 
 static int unicode_byte_type(char hi, char lo)
 {
@@ -405,11 +479,11 @@ static int unicode_byte_type(char hi, char lo)
   return BT_NONASCII;
 }
 
-#define DEFINE_UTF16_TO_UTF8 \
+#define DEFINE_UTF16_TO_UTF8(E) \
 static \
-void PREFIX(toUtf8)(const ENCODING *enc, \
-		    const char **fromP, const char *fromLim, \
-		    char **toP, const char *toLim) \
+void E ## toUtf8(const ENCODING *enc, \
+		 const char **fromP, const char *fromLim, \
+		 char **toP, const char *toLim) \
 { \
   const char *from; \
   for (from = *fromP; from != fromLim; from += 2) { \
@@ -468,11 +542,11 @@ void PREFIX(toUtf8)(const ENCODING *enc, \
   *fromP = from; \
 }
 
-#define DEFINE_UTF16_TO_UTF16 \
+#define DEFINE_UTF16_TO_UTF16(E) \
 static \
-void PREFIX(toUtf16)(const ENCODING *enc, \
-		     const char **fromP, const char *fromLim, \
-		     unsigned short **toP, const unsigned short *toLim) \
+void E ## toUtf16(const ENCODING *enc, \
+		  const char **fromP, const char *fromLim, \
+		  unsigned short **toP, const unsigned short *toLim) \
 { \
   /* Avoid copying first half only of surrogate */ \
   if (fromLim - *fromP > ((toLim - *toP) << 1) \
@@ -482,34 +556,92 @@ void PREFIX(toUtf16)(const ENCODING *enc, \
     *(*toP)++ = (GET_HI(*fromP) << 8) | GET_LO(*fromP); \
 }
 
-#define PREFIX(ident) little2_ ## ident
-#define MINBPC(enc) 2
-#define BYTE_TYPE(enc, p) \
- ((p)[1] == 0 \
-  ? ((struct normal_encoding *)(enc))->type[(unsigned char)*(p)] \
-  : unicode_byte_type((p)[1], (p)[0]))
-#define BYTE_TO_ASCII(enc, p) ((p)[1] == 0 ? (p)[0] : -1)
-#define CHAR_MATCHES(enc, p, c) ((p)[1] == 0 && (p)[0] == c)
-#define IS_NAME_CHAR(enc, p, n) (0)
-#define IS_NAME_CHAR_MINBPC(enc, p) \
-  UCS2_GET_NAMING(namePages, (unsigned char)p[1], (unsigned char)p[0])
-#define IS_NMSTRT_CHAR(enc, p, n) (0)
-#define IS_NMSTRT_CHAR_MINBPC(enc, p) \
-  UCS2_GET_NAMING(nmstrtPages, (unsigned char)p[1], (unsigned char)p[0])
-
-#include "xmltok_impl.c"
-
 #define SET2(ptr, ch) \
   (((ptr)[0] = ((ch) & 0xff)), ((ptr)[1] = ((ch) >> 8)))
 #define GET_LO(ptr) ((unsigned char)(ptr)[0])
 #define GET_HI(ptr) ((unsigned char)(ptr)[1])
 
-DEFINE_UTF16_TO_UTF8
-DEFINE_UTF16_TO_UTF16
+DEFINE_UTF16_TO_UTF8(little2_)
+DEFINE_UTF16_TO_UTF16(little2_)
 
 #undef SET2
 #undef GET_LO
 #undef GET_HI
+
+#define SET2(ptr, ch) \
+  (((ptr)[0] = ((ch) >> 8)), ((ptr)[1] = ((ch) & 0xFF)))
+#define GET_LO(ptr) ((unsigned char)(ptr)[1])
+#define GET_HI(ptr) ((unsigned char)(ptr)[0])
+
+DEFINE_UTF16_TO_UTF8(big2_)
+DEFINE_UTF16_TO_UTF16(big2_)
+
+#undef SET2
+#undef GET_LO
+#undef GET_HI
+
+#define LITTLE2_BYTE_TYPE(enc, p) \
+ ((p)[1] == 0 \
+  ? ((struct normal_encoding *)(enc))->type[(unsigned char)*(p)] \
+  : unicode_byte_type((p)[1], (p)[0]))
+#define LITTLE2_BYTE_TO_ASCII(enc, p) ((p)[1] == 0 ? (p)[0] : -1)
+#define LITTLE2_CHAR_MATCHES(enc, p, c) ((p)[1] == 0 && (p)[0] == c)
+#define LITTLE2_IS_NAME_CHAR_MINBPC(enc, p) \
+  UCS2_GET_NAMING(namePages, (unsigned char)p[1], (unsigned char)p[0])
+#define LITTLE2_IS_NMSTRT_CHAR_MINBPC(enc, p) \
+  UCS2_GET_NAMING(nmstrtPages, (unsigned char)p[1], (unsigned char)p[0])
+
+#ifdef XML_MIN_SIZE
+
+static
+int little2_byteType(const ENCODING *enc, const char *p)
+{
+  return LITTLE2_BYTE_TYPE(enc, p);
+}
+
+static
+int little2_byteToAscii(const ENCODING *enc, const char *p)
+{
+  return LITTLE2_BYTE_TO_ASCII(enc, p);
+}
+
+static
+int little2_charMatches(const ENCODING *enc, const char *p, int c)
+{
+  return LITTLE2_CHAR_MATCHES(enc, p, c);
+}
+
+static
+int little2_isNameMin(const ENCODING *enc, const char *p)
+{
+  return LITTLE2_IS_NAME_CHAR_MINBPC(enc, p);
+}
+
+static
+int little2_isNmstrtMin(const ENCODING *enc, const char *p)
+{
+  return LITTLE2_IS_NMSTRT_CHAR_MINBPC(enc, p);
+}
+
+#undef VTABLE
+#define VTABLE VTABLE1, little2_toUtf8, little2_toUtf16
+
+#else /* not XML_MIN_SIZE */
+
+#undef PREFIX
+#define PREFIX(ident) little2_ ## ident
+#define MINBPC(enc) 2
+/* CHAR_MATCHES is guaranteed to have MINBPC bytes available. */
+#define BYTE_TYPE(enc, p) LITTLE2_BYTE_TYPE(enc, p)
+#define BYTE_TO_ASCII(enc, p) LITTLE2_BYTE_TO_ASCII(enc, p) 
+#define CHAR_MATCHES(enc, p, c) LITTLE2_CHAR_MATCHES(enc, p, c)
+#define IS_NAME_CHAR(enc, p, n) 0
+#define IS_NAME_CHAR_MINBPC(enc, p) LITTLE2_IS_NAME_CHAR_MINBPC(enc, p)
+#define IS_NMSTRT_CHAR(enc, p, n) (0)
+#define IS_NMSTRT_CHAR_MINBPC(enc, p) LITTLE2_IS_NMSTRT_CHAR_MINBPC(enc, p)
+
+#include "xmltok_impl.c"
+
 #undef MINBPC
 #undef BYTE_TYPE
 #undef BYTE_TO_ASCII
@@ -520,7 +652,9 @@ DEFINE_UTF16_TO_UTF16
 #undef IS_NMSTRT_CHAR_MINBPC
 #undef IS_INVALID_CHAR
 
-#ifdef XMLNS
+#endif /* not XML_MIN_SIZE */
+
+#ifdef XML_NS
 
 static const struct normal_encoding little2_encoding_ns = { 
   { VTABLE, 2, 0,
@@ -533,7 +667,8 @@ static const struct normal_encoding little2_encoding_ns = {
   {
 #include "asciitab.h"
 #include "latin1tab.h"
-  }
+  },
+  STANDARD_VTABLE(little2_)
 };
 
 #endif
@@ -551,19 +686,21 @@ static const struct normal_encoding little2_encoding = {
 #include "asciitab.h"
 #undef BT_COLON
 #include "latin1tab.h"
-  }
+  },
+  STANDARD_VTABLE(little2_)
 };
 
 #if BYTE_ORDER != 21
 
-#ifdef XMLNS
+#ifdef XML_NS
 
 static const struct normal_encoding internal_little2_encoding_ns = { 
   { VTABLE, 2, 0, 1 },
   {
 #include "iasciitab.h"
 #include "latin1tab.h"
-  }
+  },
+  STANDARD_VTABLE(little2_)
 };
 
 #endif
@@ -575,42 +712,75 @@ static const struct normal_encoding internal_little2_encoding = {
 #include "iasciitab.h"
 #undef BT_COLON
 #include "latin1tab.h"
-  }
+  },
+  STANDARD_VTABLE(little2_)
 };
 
 #endif
 
-#undef PREFIX
 
-#define PREFIX(ident) big2_ ## ident
-#define MINBPC(enc) 2
-/* CHAR_MATCHES is guaranteed to have MINBPC bytes available. */
-#define BYTE_TYPE(enc, p) \
+#define BIG2_BYTE_TYPE(enc, p) \
  ((p)[0] == 0 \
   ? ((struct normal_encoding *)(enc))->type[(unsigned char)(p)[1]] \
   : unicode_byte_type((p)[0], (p)[1]))
-#define BYTE_TO_ASCII(enc, p) ((p)[0] == 0 ? (p)[1] : -1)
-#define CHAR_MATCHES(enc, p, c) ((p)[0] == 0 && (p)[1] == c)
-#define IS_NAME_CHAR(enc, p, n) 0
-#define IS_NAME_CHAR_MINBPC(enc, p) \
+#define BIG2_BYTE_TO_ASCII(enc, p) ((p)[0] == 0 ? (p)[1] : -1)
+#define BIG2_CHAR_MATCHES(enc, p, c) ((p)[0] == 0 && (p)[1] == c)
+#define BIG2_IS_NAME_CHAR_MINBPC(enc, p) \
   UCS2_GET_NAMING(namePages, (unsigned char)p[0], (unsigned char)p[1])
-#define IS_NMSTRT_CHAR(enc, p, n) (0)
-#define IS_NMSTRT_CHAR_MINBPC(enc, p) \
+#define BIG2_IS_NMSTRT_CHAR_MINBPC(enc, p) \
   UCS2_GET_NAMING(nmstrtPages, (unsigned char)p[0], (unsigned char)p[1])
+
+#ifdef XML_MIN_SIZE
+
+static
+int big2_byteType(const ENCODING *enc, const char *p)
+{
+  return BIG2_BYTE_TYPE(enc, p);
+}
+
+static
+int big2_byteToAscii(const ENCODING *enc, const char *p)
+{
+  return BIG2_BYTE_TO_ASCII(enc, p);
+}
+
+static
+int big2_charMatches(const ENCODING *enc, const char *p, int c)
+{
+  return BIG2_CHAR_MATCHES(enc, p, c);
+}
+
+static
+int big2_isNameMin(const ENCODING *enc, const char *p)
+{
+  return BIG2_IS_NAME_CHAR_MINBPC(enc, p);
+}
+
+static
+int big2_isNmstrtMin(const ENCODING *enc, const char *p)
+{
+  return BIG2_IS_NMSTRT_CHAR_MINBPC(enc, p);
+}
+
+#undef VTABLE
+#define VTABLE VTABLE1, big2_toUtf8, big2_toUtf16
+
+#else /* not XML_MIN_SIZE */
+
+#undef PREFIX
+#define PREFIX(ident) big2_ ## ident
+#define MINBPC(enc) 2
+/* CHAR_MATCHES is guaranteed to have MINBPC bytes available. */
+#define BYTE_TYPE(enc, p) BIG2_BYTE_TYPE(enc, p)
+#define BYTE_TO_ASCII(enc, p) BIG2_BYTE_TO_ASCII(enc, p) 
+#define CHAR_MATCHES(enc, p, c) BIG2_CHAR_MATCHES(enc, p, c)
+#define IS_NAME_CHAR(enc, p, n) 0
+#define IS_NAME_CHAR_MINBPC(enc, p) BIG2_IS_NAME_CHAR_MINBPC(enc, p)
+#define IS_NMSTRT_CHAR(enc, p, n) (0)
+#define IS_NMSTRT_CHAR_MINBPC(enc, p) BIG2_IS_NMSTRT_CHAR_MINBPC(enc, p)
 
 #include "xmltok_impl.c"
 
-#define SET2(ptr, ch) \
-  (((ptr)[0] = ((ch) >> 8)), ((ptr)[1] = ((ch) & 0xFF)))
-#define GET_LO(ptr) ((unsigned char)(ptr)[1])
-#define GET_HI(ptr) ((unsigned char)(ptr)[0])
-
-DEFINE_UTF16_TO_UTF8
-DEFINE_UTF16_TO_UTF16
-
-#undef SET2
-#undef GET_LO
-#undef GET_HI
 #undef MINBPC
 #undef BYTE_TYPE
 #undef BYTE_TO_ASCII
@@ -621,7 +791,9 @@ DEFINE_UTF16_TO_UTF16
 #undef IS_NMSTRT_CHAR_MINBPC
 #undef IS_INVALID_CHAR
 
-#ifdef XMLNS
+#endif /* not XML_MIN_SIZE */
+
+#ifdef XML_NS
 
 static const struct normal_encoding big2_encoding_ns = {
   { VTABLE, 2, 0,
@@ -634,7 +806,8 @@ static const struct normal_encoding big2_encoding_ns = {
   {
 #include "asciitab.h"
 #include "latin1tab.h"
-  }
+  },
+  STANDARD_VTABLE(big2_)
 };
 
 #endif
@@ -652,19 +825,21 @@ static const struct normal_encoding big2_encoding = {
 #include "asciitab.h"
 #undef BT_COLON
 #include "latin1tab.h"
-  }
+  },
+  STANDARD_VTABLE(big2_)
 };
 
 #if BYTE_ORDER != 12
 
-#ifdef XMLNS
+#ifdef XML_NS
 
 static const struct normal_encoding internal_big2_encoding_ns = {
   { VTABLE, 2, 0, 1 },
   {
 #include "iasciitab.h"
 #include "latin1tab.h"
-  }
+  },
+  STANDARD_VTABLE(big2_)
 };
 
 #endif
@@ -676,7 +851,8 @@ static const struct normal_encoding internal_big2_encoding = {
 #include "iasciitab.h"
 #undef BT_COLON
 #include "latin1tab.h"
-  }
+  },
+  STANDARD_VTABLE(big2_)
 };
 
 #endif
@@ -851,8 +1027,14 @@ int doParseXmlDecl(const ENCODING *(*encodingFinder)(const ENCODING *,
       *badPtr = ptr;
       return 0;
     }
-    if (!name)
+    if (!name) {
+      if (isGeneralTextEntity) {
+	/* a TextDecl must have an EncodingDecl */
+	*badPtr = ptr;
+	return 0;
+      }
       return 1;
+    }
   }
   if (XmlNameMatchesAscii(enc, name, "encoding")) {
     int c = toAscii(enc, val, end);
@@ -1203,6 +1385,18 @@ int initScan(const ENCODING **encodingTable,
     return XML_TOK_NONE;
   encPtr = enc->encPtr;
   if (ptr + 1 == end) {
+    /* only a single byte available for auto-detection */
+    /* a well-formed document entity must have more than one byte */
+    if (state != XML_CONTENT_STATE)
+      return XML_TOK_PARTIAL;
+    /* so we're parsing an external text entity... */
+    /* if UTF-16 was externally specified, then we need at least 2 bytes */
+    switch (INIT_ENC_INDEX(enc)) {
+    case UTF_16_ENC:
+    case UTF_16LE_ENC:
+    case UTF_16BE_ENC:
+      return XML_TOK_PARTIAL;
+    }
     switch ((unsigned char)*ptr) {
     case 0xFE:
     case 0xFF:
@@ -1218,12 +1412,6 @@ int initScan(const ENCODING **encodingTable,
   }
   else {
     switch (((unsigned char)ptr[0] << 8) | (unsigned char)ptr[1]) {
-    case 0x003C:
-      if (INIT_ENC_INDEX(enc) == UTF_16LE_ENC
-	  && state == XML_CONTENT_STATE)
-	break;
-      *encPtr = encodingTable[UTF_16BE_ENC];
-      return XmlTok(*encPtr, state, ptr, end, nextTokPtr);
     case 0xFEFF:
       if (INIT_ENC_INDEX(enc) == ISO_8859_1_ENC
 	  && state == XML_CONTENT_STATE)
@@ -1231,8 +1419,10 @@ int initScan(const ENCODING **encodingTable,
       *nextTokPtr = ptr + 2;
       *encPtr = encodingTable[UTF_16BE_ENC];
       return XML_TOK_BOM;
+    /* 00 3C is handled in the default case */
     case 0x3C00:
-      if (INIT_ENC_INDEX(enc) == UTF_16BE_ENC
+      if ((INIT_ENC_INDEX(enc) == UTF_16BE_ENC
+	   || INIT_ENC_INDEX(enc) == UTF_16_ENC)
 	  && state == XML_CONTENT_STATE)
 	break;
       *encPtr = encodingTable[UTF_16LE_ENC];
@@ -1262,6 +1452,33 @@ int initScan(const ENCODING **encodingTable,
 	*encPtr = encodingTable[UTF_8_ENC];
 	return XML_TOK_BOM;
       }
+      break;
+    default:
+      if (ptr[0] == '\0') {
+	/* 0 isn't a legal data character. Furthermore a document entity can only
+	   start with ASCII characters.  So the only way this can fail to be big-endian
+	   UTF-16 if it it's an external parsed general entity that's labelled as
+	   UTF-16LE. */
+	if (state == XML_CONTENT_STATE && INIT_ENC_INDEX(enc) == UTF_16LE_ENC)
+	  break;
+	*encPtr = encodingTable[UTF_16BE_ENC];
+	return XmlTok(*encPtr, state, ptr, end, nextTokPtr);
+      }
+      else if (ptr[1] == '\0') {
+	/* We could recover here in the case:
+	    - parsing an external entity
+	    - second byte is 0
+	    - no externally specified encoding
+	    - no encoding declaration
+	   by assuming UTF-16LE.  But we don't, because this would mean when
+	   presented just with a single byte, we couldn't reliably determine
+	   whether we needed further bytes. */
+	if (state == XML_CONTENT_STATE)
+	  break;
+	*encPtr = encodingTable[UTF_16LE_ENC];
+	return XmlTok(*encPtr, state, ptr, end, nextTokPtr);
+      }
+      break;
     }
   }
   *encPtr = encodingTable[INIT_ENC_INDEX(enc)];
@@ -1275,7 +1492,7 @@ int initScan(const ENCODING **encodingTable,
 #undef NS
 #undef ns
 
-#ifdef XMLNS
+#ifdef XML_NS
 
 #define NS(x) x ## NS
 #define ns(x) x ## _ns
@@ -1297,4 +1514,4 @@ XmlInitUnknownEncodingNS(void *mem,
   return enc;
 }
 
-#endif /* XMLNS */
+#endif /* XML_NS */

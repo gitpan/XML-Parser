@@ -14,7 +14,7 @@ use Carp;
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.18';
+  $VERSION = '2.19';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
 }
@@ -671,6 +671,14 @@ This event is generated when a processing instruction is recognized.
 =head2 Comment		(Expat, Data)
 
 This event is generated when a comment is recognized.
+
+=item * CdataStart	(Expat)
+
+This is called at the start of a CDATA section.
+
+=item * CdataEnd	(Expat)
+
+This is called at the end of a CDATA section.
 
 =head2 Default		(Expat, String)
 

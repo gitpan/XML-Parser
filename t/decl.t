@@ -1,4 +1,4 @@
-BEGIN {print "1..14\n";}
+BEGIN {print "1..17\n";}
 END {print "not ok 1\n" unless $loaded;}
 use XML::Parser;
 $loaded = 1;
@@ -30,6 +30,21 @@ my @tests;
 
 my $equivstr;
 
+sub enth1 {
+    my ($p, $name, $val, $sys, $pub, $notation) = @_;
+
+    $tests[2]++ if ($name eq 'alpha' and $val eq 'a');
+    $tests[3]++ if ($name eq 'skunk' and $val eq 'stinky animal');
+    $tests[4]++ if ($name eq 'logo' and !defined($val) and
+		    $sys eq 'logo.gif' and $pub eq '//Widgets Corp/Logo'
+		    and $notation eq 'gif');
+}
+
+my $parser = new XML::Parser(ErrorContext => 2,
+			     Handlers => {Entity => \&enth1});
+
+$parser->parse($docstr);
+
 sub dh {
     my ($p, $data) = @_;
 
@@ -40,20 +55,20 @@ sub eleh {
     my ($p, $name, $model) = @_;
 
     if ($name eq 'junk' and $model eq '(bar|xyz+)') {
-	$tests[2]++;
+	$tests[5]++;
 	$p->default_current;
-	$tests[3]++ if $equivstr eq '<!ELEMENT junk (bar|xyz+)>';
+	$tests[6]++ if $equivstr eq '<!ELEMENT junk (bar|xyz+)>';
     }
 
-    $tests[4]++ if ($name eq 'bar' and $model eq 'ANY');
+    $tests[7]++ if ($name eq 'bar' and $model eq 'ANY');
 }
 
-sub enth {
+sub enth2 {
     my ($p, $name, $val, $sys, $pub, $notation) = @_;
 
-    $tests[5]++ if ($name eq 'alpha' and $val eq 'a');
-    $tests[6]++ if ($name eq 'skunk' and $val eq 'stinky animal');
-    $tests[7]++ if ($name eq 'logo' and !defined($val) and
+    $tests[8]++ if ($name eq 'alpha' and $val eq 'a');
+    $tests[9]++ if ($name eq 'skunk' and $val eq 'stinky animal');
+    $tests[10]++ if ($name eq 'logo' and !defined($val) and
 		    $sys eq 'logo.gif' and $pub eq '//Widgets Corp/Logo'
 		    and $notation eq 'gif');
 }
@@ -61,20 +76,20 @@ sub enth {
 sub doc {
     my ($p, $name, $sys, $pub, $intdecl) = @_;
 
-    $tests[8]++ if $name eq 'foo';
-    $tests[9]++ if $sys eq 'foo.dtd';
-    $tests[10]++ if length($intdecl) == 439;
+    $tests[11]++ if $name eq 'foo';
+    $tests[12]++ if $sys eq 'foo.dtd';
+    $tests[13]++ if length($intdecl) == 439;
 }
 
 sub att {
     my ($p, $elname, $attname, $type, $default, $fixed) = @_;
 
-    $tests[11]++ if ($elname eq 'junk' and $attname eq 'id'
+    $tests[14]++ if ($elname eq 'junk' and $attname eq 'id'
 		     and $type eq 'ID' and $default eq '#REQUIRED'
 		     and not $fixed);
-    $tests[12]++ if ($elname eq 'junk' and $attname eq 'version'
+    $tests[15]++ if ($elname eq 'junk' and $attname eq 'version'
 		     and $type eq 'CDATA' and $default eq "'1.0'" and $fixed);
-    $tests[13]++ if ($elname eq 'junk' and $attname eq 'color'
+    $tests[16]++ if ($elname eq 'junk' and $attname eq 'color'
 		     and $type eq '(red|green|blue)'
 		     and $default eq "'green'");
 }
@@ -83,13 +98,11 @@ sub xd {
     my ($p, $version, $enc, $stand) = @_;
 
     if ($version eq '1.0' and $enc eq 'US-ASCII' and not defined($stand)) {
-	$tests[14]++;
+	$tests[17]++;
     }
 }
 
-my $parser = new XML::Parser(ErrorContext => 2);
-
-$parser->setHandlers(Entity  => \&enth,
+$parser->setHandlers(Entity  => \&enth2,
 		     Element => \&eleh,
 		     Attlist => \&att,
 		     Doctype => \&doc,
@@ -98,7 +111,7 @@ $parser->setHandlers(Entity  => \&enth,
 
 $parser->parse($docstr);
 
-for (2 .. 14) {
+for (2 .. 17) {
     print "not " unless $tests[$_];
     print "ok $_\n";
 }

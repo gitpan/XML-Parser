@@ -12,6 +12,7 @@
 #include "EXTERN.h"
 #include "XSUB.h"
 #include "perl.h"
+#include "patchlevel.h"
 #include "xmlparse.h"
 #include "encoding.h"
 
@@ -23,6 +24,7 @@
 #define PL_sv_undef	sv_undef
 #define PL_sv_no	sv_no
 #define PL_sv_yes	sv_yes
+#define PL_na		na
 #endif
 
 #define BUFSIZE 32768
@@ -157,6 +159,9 @@ typedef struct {
   SV* unprsd_sv;
   SV* notation_sv;
   SV* extent_sv;
+
+  SV* startcd_sv;
+  SV* endcd_sv;
 } CallbackVector;
 
 static HV* EncodingTable = NULL;
@@ -1116,6 +1121,34 @@ commenthandle(void *userData, const char *string)
 }  /* End commenthandler */
 
 static void
+startCdata(void *userData)
+{
+  dSP;
+  CallbackVector* cbv = (CallbackVector*) userData;
+
+  if (cbv->startcd_sv) {
+    PUSHMARK(sp);
+    XPUSHs(cbv->self_sv);
+    PUTBACK;
+    perl_call_sv(cbv->startcd_sv, G_DISCARD);
+  }
+}  /* End startCdata */
+
+static void
+endCdata(void *userData)
+{
+  dSP;
+  CallbackVector* cbv = (CallbackVector*) userData;
+
+  if (cbv->endcd_sv) {
+    PUSHMARK(sp);
+    XPUSHs(cbv->self_sv);
+    PUTBACK;
+    perl_call_sv(cbv->endcd_sv, G_DISCARD);
+  }
+}  /* End endCdata */
+
+static void
 defaulthandle(void *userData, const char *string, int len)
 {
   dSP;
@@ -1125,6 +1158,9 @@ defaulthandle(void *userData, const char *string, int len)
     if (parse_local(cbv, string, len))
       return;
   }
+
+  if (! cbv->dflt_sv)
+    return;
 
   PUSHMARK(SP);
   XPUSHs(cbv->self_sv);
@@ -1443,7 +1479,12 @@ recString(void *userData, const char *string, int len)
 {
   CallbackVector *cbv = (CallbackVector*) userData;
 
-  cbv->recstring = mynewSVpv((char *) string, len);
+  if (cbv->recstring) {
+    sv_catpvn(cbv->recstring, (char *) string, len);
+  }
+  else {
+    cbv->recstring = mynewSVpv((char *) string, len);
+  }
 }  /* End recString */
 
 MODULE = XML::Parser::Expat PACKAGE = XML::Parser::Expat	PREFIX = XML_
@@ -1456,7 +1497,7 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
     CODE:
 	{
 	  CallbackVector *cbv;
-	  char *enc = (char *) (SvTRUE(enc_sv) ? SvPV(enc_sv,na) : 0);
+	  char *enc = (char *) (SvTRUE(enc_sv) ? SvPV(enc_sv,PL_na) : 0);
 	  SV ** noexp;
 
 	  Newz(0, cbv, 1, CallbackVector);
@@ -1501,7 +1542,7 @@ int
 XML_ParseString(parser, s)
         XML_Parser			parser
 	char *				s
-	int				len = na;
+	int				len = PL_na;
     CODE:
         {
 	  CallbackVector * cbv;
@@ -1812,7 +1853,7 @@ XML_PositionContext(parser, lines)
 	    parsepos = 0;
 
 	  if (parsepos >= cbv->bufflen)
-	    croak("Parse position is outside of buffer");
+	    croak("PositionContext: Parse position is outside of buffer");
 
 	  for (markbeg = &pos[parsepos], cnt = 0; markbeg >= pos; markbeg--)
 	    {
@@ -1923,6 +1964,8 @@ XML_RecognizedString(parser)
 			       cbv->dtb_len - cbv->dtb_offset);
 	  }
 	  else {
+	    cbv->recstring = 0;
+
 	    if (cbv->no_expand)
 	      XML_SetDefaultHandler(parser, recString);
 	    else
@@ -2063,3 +2106,86 @@ XML_FreeEncoding(enc)
 	Safefree(enc->bytemap);
 	Safefree(enc->prefixes);
 	Safefree(enc);
+
+SV *
+XML_OriginalString(parser)
+	XML_Parser			parser
+    CODE:
+	{
+	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+	  long parsepos, parselim;
+
+	  parsepos = XML_GetCurrentByteIndex(parser);
+	  parselim = XML_GetCurrentByteLimit(parser);
+
+	  if (parsepos > parselim)
+	    croak("OriginalString: Parse position > Parse limit");
+
+	  parsepos -= cbv->offset;
+	  parselim -= cbv->offset;
+
+	  if (parsepos < 0 || parselim > cbv->bufflen)
+	    croak("OriginalString: Part of string is outside buffer");
+
+	  RETVAL = mynewSVpv(&cbv->buffstrt[parsepos], parselim - parsepos);
+	}
+    OUTPUT:
+	RETVAL
+
+void
+XML_SetStartCdataHandler(parser, startcd_sv)
+	XML_Parser			parser
+	SV *				startcd_sv
+    CODE:
+	{
+	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+	  XML_StartCdataSectionHandler scdhndl =
+	    (XML_StartCdataSectionHandler) 0;
+	  XML_EndCdataSectionHandler ecdhndl =
+	    (XML_EndCdataSectionHandler) 0;
+
+	  if (SvTRUE(startcd_sv))
+	    {
+	      XMLP_UPD(startcd_sv);
+	      scdhndl = startCdata;
+	    }
+	  else
+	    {
+	      SvREFCNT_dec(cbv->startcd_sv);
+	      cbv->startcd_sv = (SV *) 0;
+	    }
+
+	  if (cbv->endcd_sv)
+	    ecdhndl = endCdata;
+
+	  XML_SetCdataSectionHandler(parser, scdhndl, ecdhndl);
+	}
+
+void
+XML_SetEndCdataHandler(parser, endcd_sv)
+	XML_Parser			parser
+	SV *				endcd_sv
+    CODE:
+	{
+	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+	  XML_StartCdataSectionHandler scdhndl =
+	    (XML_StartCdataSectionHandler) 0;
+	  XML_EndCdataSectionHandler ecdhndl =
+	    (XML_EndCdataSectionHandler) 0;
+
+	  if (SvTRUE(endcd_sv))
+	    {
+	      XMLP_UPD(endcd_sv);
+	      ecdhndl = endCdata;
+	    }
+	  else
+	    {
+	      SvREFCNT_dec(cbv->endcd_sv);
+	      cbv->endcd_sv = (SV *) 0;
+	    }
+
+	  if (cbv->startcd_sv)
+	    scdhndl = startCdata;
+
+	  XML_SetCdataSectionHandler(parser, scdhndl, ecdhndl);
+	}

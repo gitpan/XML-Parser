@@ -1,0 +1,30 @@
+*** expat/xmlparse/xmlparse.c.orig	Sun Dec 27 10:00:12 1998
+--- expat/xmlparse/xmlparse.c	Fri Jan  1 17:09:07 1999
+***************
+*** 820,825 ****
+--- 820,832 ----
+    return -1;
+  }
+  
++ long XML_GetCurrentByteLimit(XML_Parser parser)
++ {
++   if (eventPtr)
++     return parseEndByteIndex - (parseEndPtr - eventEndPtr);
++   return -1;
++ }
++ 
+  int XML_GetCurrentLineNumber(XML_Parser parser)
+  {
+    if (eventPtr) {
+*** expat/xmlparse/xmlparse.h.orig	Fri Nov 27 11:32:10 1998
+--- expat/xmlparse/xmlparse.h	Fri Jan  1 17:09:07 1999
+***************
+*** 410,415 ****
+--- 410,416 ----
+  int XMLPARSEAPI XML_GetCurrentLineNumber(XML_Parser parser);
+  int XMLPARSEAPI XML_GetCurrentColumnNumber(XML_Parser parser);
+  long XMLPARSEAPI XML_GetCurrentByteIndex(XML_Parser parser);
++ long XMLPARSEAPI XML_GetCurrentByteLimit(XML_Parser parser);
+  
+  /* For backwards compatibility with previous versions. */
+  #define XML_GetErrorLineNumber XML_GetCurrentLineNumber
