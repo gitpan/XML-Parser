@@ -1,5 +1,10 @@
 Revision history for Perl extension XML::Parser.
 
+2.31 Tue Apr  2 13:39:51 EST 2002
+	- Ilya Zakharevich <ilya@math.ohio-state.edu> and
+	  Dave Mitchell <davem@fdgroup.com> both provided patches to
+	  fix problems module had with 5.8.0
+	- Dave Mitchell also made some UTF-8 related fixes to the test suite.
 2.30 Thu Oct  5 12:47:36 EDT 2000
 	- Get rid of ContentStash global. Not that big a deal looking it up
 	  everytime and gets rid of a potential threading problem.

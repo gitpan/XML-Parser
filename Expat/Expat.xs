@@ -1431,15 +1431,17 @@ XML_ParserFree(parser)
 	}
 
 int
-XML_ParseString(parser, s)
+XML_ParseString(parser, sv)
         XML_Parser			parser
-	char *				s
-	int				len = PL_na;
+	SV *				sv
     CODE:
         {
 	  CallbackVector * cbv;
+	  STRLEN len;
+	  char *s = SvPV(sv, len);
 
           cbv = (CallbackVector *) XML_GetUserData(parser);
+	  
 
 	  RETVAL = XML_Parse(parser, s, len, 1);
 	  SPAGAIN; /* XML_Parse might have changed stack pointer */
@@ -1476,12 +1478,13 @@ XML_ParseStream(parser, ioref, delim)
 	RETVAL
 
 int
-XML_ParsePartial(parser, s)
+XML_ParsePartial(parser, sv)
 	XML_Parser			parser
-	char *				s
-	int				len = PL_na;
+	SV *				sv
     CODE:
 	{
+	  STRLEN len;
+	  char *s = SvPV(sv, len);
 	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 
 	  RETVAL = XML_Parse(parser, s, len, 0);

@@ -8,13 +8,13 @@ my $internal_subset =<<'End_of_internal;';
 [
   <!ENTITY % foo "IGNORE">
   <!ENTITY % bar "INCLUDE">
-  <!ENTITY more SYSTEM "ext2.ent">
+  <!ENTITY more SYSTEM "t/ext2.ent">
 ]
 End_of_internal;
 
 my $doc =<<"End_of_doc;";
 <?xml version="1.0" encoding="ISO-8859-1"?>
-<!DOCTYPE foo SYSTEM "foo.dtd"
+<!DOCTYPE foo SYSTEM "t/foo.dtd"
 $internal_subset>
 <foo>Happy, happy
 <bar>&joy;, &joy;</bar>
@@ -87,7 +87,9 @@ $p->parse($doc);
 print "not " unless $gotmore;
 print "ok 6\n";
 
-print "not " unless $bartxt eq "\xe5\x83\x96, \xe5\x83\x96";
+print "not " unless $bartxt eq ($] < 5.006)
+		? "\xe5\x83\x96, \xe5\x83\x96"
+		: chr(0x50d6). ", " . chr(0x50d6);
 print "ok 7\n";
 
 print "not " unless $gotinclude;

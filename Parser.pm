@@ -13,7 +13,7 @@ use IO::File;
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.30';
+  $VERSION = '2.31';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
 }

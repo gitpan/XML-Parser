@@ -1,56 +1,4 @@
-Tuesday, Nov. 27, 2001
-
-Dear MacPerl Users,
-
-this is the XML-Parser-2.30 module with a shared library compiled for MacPerl 5.6.1 
-(and higher). This was compiled with MPW's MrC (PPC). Passed all tests with the MrC
-build of the MacPerl 5.6.1 MPW tool (after a static build, though) and application. 
-Let me know of any problems you might encounter.
-
-
-*** NOTE:
-This bundle contains shared libraries, which are loaded dynamically by MacPerl -- 
-well, normally. Currently, dynamic loading of shared libs might NOT work with the MPW 
-MacPerl tool. However, dynamic loading reliable works with the MacPerl application.
-Note also that dynamic loading is NOT supported by the 68K versions of the MacPerl 
-application and tool. And finally, note that this distribution will NOT work with 
-good old MacPerl 5.2.0r4.
-
-
-You can download the XML-Parser-2.30-bin56Mac.tar.gz tarball from my website at
-
-    http://usemacperl.esmartweb.com/modules.html
-
-or from my CPAN directory
-
-    $CPAN/authors/id/T/TW/TWEGNER/
-
-
-
-INSTALLATION
-============
-The module is best installed using Chris Nandor's installme.plx droplet. Simply 
-drop the packed archive or the unpacked folder on the droplet. Answer the 
-upcoming question "Convert all text and MacBinary files?" with "Yes". This should 
-install the module properly. 
-
-Since MacPerl 5.6.1 beta 1, the installer is part of the MacPerl disribution.
-	
-
-Have fun.
-
---
-Thomas Wegner
-
-<wegner_thomas@yahoo.com>
-
-
-
-############################ ORIGINAL FOLLOWS ####################################################################
-
-
-
-			XML::Parser Version 2.30
+			XML::Parser Version 2.31
 
 Copyright (c) 1998-2000 Larry Wall and Clark Cooper.
 All rights reserved.
@@ -109,6 +57,13 @@ on topics relating to perl and XML takes place on the perl-xml mailing
 list, to which you can subscribe by sending mail to:
 
     subscribe-perl-xml@lyris.activestate.com
+
+Differences from Version 2.30
+=============================
+
+Version 2.31 is a minor bugfix release to allow XML::Parser to
+work under the forthcoming Perl 5.8.0 release. There are no functional
+changes.
 
 Differences from Version 2.29
 =============================

@@ -12,7 +12,7 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.30" ;
+$VERSION = "2.31" ;
 
 $have_File_Spec = $INC{'File/Spec.pm'} || do 'File/Spec.pm';
 
@@ -24,11 +24,7 @@ if ($have_File_Spec) {
 		    File::Spec->curdir);
 }
 else {
-  if ($^O eq 'MacOS') {
-  	@Encoding_Path = (grep(-d $_, map($_ . 'XML:Parser:Encodings', @INC)), ':');
-  } else {
-    @Encoding_Path = (grep(-d $_, map($_ . '/XML/Parser/Encodings', @INC)), '.');
-  }
+  @Encoding_Path = (grep(-d $_, map($_ . '/XML/Parser/Encodings', @INC)), '.');
 }
   
 
@@ -81,16 +77,9 @@ sub load_encoding {
   $file .= '.enc' unless $file =~ /\.enc$/;
   unless ($file =~ m!^/!) {
     foreach (@Encoding_Path) {
-      my $tmp;
-	  if ($have_File_Spec) {
-	    $tmp = File::Spec->catfile($_, $file);
-	  } else {
-	    if ($^O eq 'MacOS') {
-		  $tmp = ($_ =~ /:$/) ? "$_$file" : "$_:$file";
-		} else {
-		  $tmp = "$_/$file";
-		}
-	  }
+      my $tmp = ($have_File_Spec
+		 ? File::Spec->catfile($_, $file)
+		 : "$_/$file");
       if (-e $tmp) {
 	$file = $tmp;
 	last;

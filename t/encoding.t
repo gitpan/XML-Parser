@@ -35,7 +35,9 @@ my $p = new XML::Parser(Handlers => {Start => \&start, Char => \&text});
 
 $p->parse($doc);
 
-my $exptag = "\xe7\xa5\x89";		# U+7949 blessings 0x8e83
+my $exptag = ($] < 5.006)
+		? "\xe7\xa5\x89"	# U+7949 blessings 0x8e83
+		: chr(0x7949);
 
 my @expected = (0xe8, 0x89, 0xb2,	# U+8272 beauty    0x9046
 		0xe3, 0x80, 0x81,	# U+3001 comma     0x8141

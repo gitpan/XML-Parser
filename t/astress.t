@@ -152,7 +152,12 @@ sub newch
 {
     my ($p, $str) = @_;
 
-    $tests[14]++ if $str =~ /'\302\240'/;
+    if ($] < 5.007001) {
+	$tests[14]++ if $str =~ /'\302\240'/;
+    }
+    else {
+	$tests[14]++ if $str =~ /'\xa0'/;
+    }
 }
 
 sub extent
