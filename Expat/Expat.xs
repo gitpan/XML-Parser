@@ -19,15 +19,9 @@
    anymore, but 5.004 doesn't know about PL_sv..
    Don't want to push up required version just for this. */
 
-#ifndef PL_sv_undef
+#if PATCHLEVEL < 5
 #define PL_sv_undef	sv_undef
-#endif
-
-#ifndef PL_sv_no
 #define PL_sv_no	sv_no
-#endif
-
-#ifndef PL_sv_yes
 #define PL_sv_yes	sv_yes
 #endif
 
@@ -79,6 +73,7 @@ typedef enum {
 typedef struct {
   SV* self_sv;
   XML_Parser p;
+  SV *recstring;
   char *buffstrt;
   int bufflen;
   int	offset;
@@ -151,7 +146,7 @@ typedef struct {
   SV* cmnt_sv;
   SV* dflt_sv;
 
-  /* These four are actually dealt with by default handler */
+  /* These five are actually dealt with by default handler */
 
   SV* entdcl_sv;
   SV* eledcl_sv;
@@ -173,7 +168,7 @@ check_and_set_default_handler(XML_Parser parser,
 			      int set,
 			      unsigned int hflag);
 
-#ifdef HAS_NEWSVPVN
+#if PATCHLEVEL >= 5
 #define mynewSVpv(s,len) newSVpvn((s),(len))
 #else
 /* ================================================================
@@ -304,8 +299,6 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
   else {
     tbuff = newSV(0);
     tsiz = newSViv(BUFSIZE);
-    ENTER ;
-    SAVETMPS ;
   }
 
   for (cbv->offset = 0, cbv->prev_offset = 0; ! done;
@@ -1315,7 +1308,7 @@ convert_to_unicode(void *data, const char *seq) {
     unsigned char byte = (unsigned char) seq[count];
     unsigned char bndx;
     unsigned char bmsk;
-    unsigned int offset;
+    int offset;
 
     curpfx = &enc->prefixes[index];
     offset = ((int) byte) - curpfx->min;
@@ -1444,6 +1437,14 @@ check_and_set_default_handler(XML_Parser parser,
       XML_SetDefaultHandlerExpand(parser, dflthndl);
   }
 }  /* End check_and_set_default_handler */
+
+static void
+recString(void *userData, const char *string, int len)
+{
+  CallbackVector *cbv = (CallbackVector*) userData;
+
+  cbv->recstring = mynewSVpv((char *) string, len);
+}  /* End recString */
 
 MODULE = XML::Parser::Expat PACKAGE = XML::Parser::Expat	PREFIX = XML_
 
@@ -1909,6 +1910,36 @@ XML_DefaultCurrent(parser)
 	      XML_DefaultCurrent(parser);
 	  }
 	}
+
+SV *
+XML_RecognizedString(parser)
+	XML_Parser			parser
+    CODE:
+	{
+	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+
+	  if (cbv->in_local_hndlr) {
+	    RETVAL = mynewSVpv(cbv->doctype_buffer + cbv->dtb_offset,
+			       cbv->dtb_len - cbv->dtb_offset);
+	  }
+	  else {
+	    if (cbv->no_expand)
+	      XML_SetDefaultHandler(parser, recString);
+	    else
+	      XML_SetDefaultHandlerExpand(parser, recString);
+	      
+	    XML_DefaultCurrent(parser);
+
+	    if (cbv->no_expand)
+	      XML_SetDefaultHandler(parser, cbv->dflags ? defaulthandle : 0);
+	    else
+	      XML_SetDefaultHandlerExpand(parser,
+					  cbv->dflags ? defaulthandle : 0);
+	    RETVAL = cbv->recstring;
+	  }
+	}
+    OUTPUT:
+	RETVAL
 
 int
 XML_GetErrorCode(parser)

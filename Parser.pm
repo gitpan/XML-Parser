@@ -14,7 +14,7 @@ use Carp;
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.17';
+  $VERSION = '2.18';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
 }
@@ -79,6 +79,8 @@ sub new {
     }
   }
   
+  $handlers->{ExternEnt} ||= \&default_ext_ent_handler;
+
   $args{Pkg} ||= caller;
   bless \%args, $class;
 }				# End of new
@@ -151,6 +153,60 @@ sub parsefile {
   
   $ret;
 }				# End of parsefile
+
+my %External_Entity_Table = ();
+
+sub default_ext_ent_handler {
+  my ($exp, $base, $sys) = @_;	# We don't use pub id
+
+  local(*ENT);
+
+  my $name = $sys;
+
+  if (defined($base)) {
+    $name = $base . $sys;
+  }
+
+  if ($name =~ s/^(\w+)://) {
+    my $method = $1;
+
+    unless ($method eq 'file') {
+      warn "Default external entity handler only deals with file URLs.";
+      return undef;
+    }
+  }
+
+  if ($name =~ /^[|>+]/
+      or $name =~ /\|$/) {
+    warn "Perl IO controls not permitted in system id";
+    return undef;
+  }
+
+  my $def = $External_Entity_Table{$name};
+  if (! defined($def)) {
+    unless (open(ENT, $name)) {
+      warn "Failed to open $name: $!";
+      return undef;
+    }
+    my $status;
+    $status = read(ENT, $def, -s $name);
+    close(ENT);
+
+    unless (defined($status)) {
+      warn "Error reading $name: $!";
+      return undef;
+    }
+
+    unless ($status) {
+      warn "$name is empty";
+      return undef;
+    }
+
+    $External_Entity_Table{$name} = $def;
+  }
+
+  return $def;
+}  # End default_ext_ent_handler
 
 ###################################################################
 
@@ -420,24 +476,26 @@ XML::Parser - A perl module for parsing XML documents
   use XML::Parser;
   
   $p1 = new XML::Parser(Style => 'Debug');
-$p1->parsefile('REC-xml-19980210.xml');
-$p1->parse('<foo id="me">Hello World</foo>');
+  $p1->parsefile('REC-xml-19980210.xml');
+  $p1->parse('<foo id="me">Hello World</foo>');
 
-# Alternative
-$p2 = new XML::Parser(Handlers => {Start => \&handle_start,
-				   End   => \&handle_end,
-				   Char  => \&handle_char});
-$p2->parse($socket);
+  # Alternative
+  $p2 = new XML::Parser(Handlers => {Start => \&handle_start,
+				     End   => \&handle_end,
+				     Char  => \&handle_char});
+  $p2->parse($socket);
 
-# Another alternative
-$p3 = new XML::Parser(ErrorContext => 2);
+  # Another alternative
+  $p3 = new XML::Parser(ErrorContext => 2);
 
-$p3->setHandlers(Char => \&text,
-		 Default => \&other);
-open(FOO, 'xmlgenerator |');
-$p3->parse(*FOO, ProtocolEncoding => 'ISO-8859-1');
-close(FOO);
-$p3->parsefile('junk.xml', ErrorContext => 3);
+  $p3->setHandlers(Char    => \&text,
+		   Default => \&other);
+
+  open(FOO, 'xmlgenerator |');
+  $p3->parse(*FOO, ProtocolEncoding => 'ISO-8859-1');
+  close(FOO);
+
+  $p3->parsefile('junk.xml', ErrorContext => 3);
 
 =head1 DESCRIPTION
 
@@ -450,8 +508,8 @@ These options are then passed on to the Expat object on each parse call.
 They can also be given as extra arguments to the parse methods, in which
 case they override options given at XML::Parser creation time.
 
-The behavior of the parser is controlled either by the C<L</Style>> and/or
-C<L</Handlers>> options, or by the L</setHandlers> method. These all provide
+The behavior of the parser is controlled either by C<L</Style>> and/or
+C<L</Handlers>> options, or by L</setHandlers> method. These all provide
 mechanisms for XML::Parser to set the handlers needed by XML::Parser::Expat.
 If neither C<Style> nor C<Handlers> are specified, then parsing just
 checks the document for being well-formed.
@@ -652,6 +710,11 @@ If an open filehandle is returned, it must be returned as either a glob
 (*FOO) or as a reference to a glob (e.g. an instance of IO::Handle). The
 parser will close the filehandle after using it.
 
+A default handler, XML::Parser::default_ext_ent_handler, is installed
+for this. It only handles the file URL method and it assumes "file:" if
+it isn't there. The expat base method can be used to set a basename for
+relative pathnames. If no basename is given, or if the basename is itself
+a relative name, then it is relative to the current working directory.
 
 =head2 Entity		(Expat, Name, Val, Sysid, Pubid, Ndata)
 

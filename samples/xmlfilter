@@ -1,8 +1,8 @@
 #!/usr/local/bin/perl -w
 #
-# $Revision: 1.4 $
+# $Revision: 1.5 $
 #
-# $Date: 1998/12/13 22:46:57 $
+# $Date: 1998/12/26 23:39:10 $
 
 use XML::Parser;
 
@@ -260,9 +260,7 @@ sub char_handler
 
     if (length($text) == 0)
     {
-	$p->setHandlers(Default => \&default);
-	$p->default_current;
-	$p->setHandlers(Default => 0);
+      print $p->recognized_string;
     }
 
     if ($text eq '&')
@@ -279,13 +277,6 @@ sub char_handler
     }
     print $text;
 }  # End char_handler
-
-
-sub default
-{
-    my ($p, $data) = @_;
-    print $data;
-}  # End default
 
 sub check_atts
 {

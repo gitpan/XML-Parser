@@ -4,10 +4,6 @@ use English;
 
 $define = '';
 
-if ($PERL_VERSION >= 5.005) {
-    $define = '-DHAS_NEWSVPVN ';
-}
-
 $define .= ($Config{cc} =~ /cl\.exe/i) ? '/Fo$@' : '-o $@';
 
 @expat_files = qw(expat/xmltok/xmltok.c expat/xmltok/xmlrole.c

@@ -1,5 +1,30 @@
 Revision history for Perl extension XML::Parser.
 
+2.18
+	- Alberto Accomazzi <alberto@cfa0.harvard.edu> pointed out that
+	  the DESTROY sub in the new XML::Parser::Encinfo package was
+	  pointing to the wrong package for calling FreeEncoding.
+	- Tarang Kumar Patel <mombasa@ptolemy.arc.nasa.gov> reported
+	  the mis-declaration of an integer as unsigned in the
+	  convert_to_unicode function in Expat.xs.
+	- Glenn R. Kronschnabl <grk@arlut.utexas.edu> reported a problem
+	  with ExternEnt handlers when using parsefile. Turned out to be
+	  an unmatched ENTER; SAVETMPS pair that screwed up the Perl stack.
+	- Tom Hughes <tom@compton.demon.co.uk> reported that the fix I put
+	  in for the swith to PL_sv.. names failed with 5.0005_54, since
+	  these became real variables instead of macros. Switched to just
+	  checking the PATCHLEVEL macro.
+	- Yoshida Masato <yoshidam@inse.co.jp> provided the EUC-JP encodings
+	  (the corresponding XML files are in XML::Encoding 1.01 or later.)
+	- With the advice of MURATA Makoto <murata@apsdc.ksp.fujixerox.co.jp>,
+	  removed the Shift_JIS encoding and replaced it with 4 variations
+	  he provided. He also provided an explanatory message.
+	- Added the recognized_string method to Expat, deprecating
+	  default_current.
+	- Now using expat Version 19981122 from James Clark's test directory
+	  (this fixes another bug with external entity reference handlers)
+	- Added a default external entity handler that only accesses file:
+	  based URLs.
 2.17 Sun Dec 13 17:39:58 EST 1998
 	- Replaced uses of malloc, realloc, and free with New, Renew,
 	  and Safefree respectively

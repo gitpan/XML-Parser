@@ -7,7 +7,7 @@ print "ok 1\n";
 ################################################################
 # Check encoding
 
-my $xmldec = "<?xml version='1.0' encoding='Shift_JIS' ?>\n";
+my $xmldec = "<?xml version='1.0' encoding='x-sjis-unicode' ?>\n";
 
 my $docstring=<<"End_of_doc;";
 <\x8e\x83>\x90\x46\x81\x41\x98\x61\x81\x41\x99\x44
@@ -67,7 +67,7 @@ else {
 
 $lastel = '';
 
-$p->parse($docstring, ProtocolEncoding => 'SHIFT_JIS');
+$p->parse($docstring, ProtocolEncoding => 'X-SJIS-UNICODE');
 
 if ($lastel eq $exptag) {
   print "ok 4\n";

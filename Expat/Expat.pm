@@ -12,7 +12,7 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.17" ;
+$VERSION = "2.18" ;
 
 %Encoding_Table = ();
 @Encoding_Path = (grep(-d $_, map($_ . '/XML/Parser/Encodings', @INC)), '.');
@@ -126,6 +126,11 @@ sub xpcarp {
 sub default_current {
   my $self = shift;
   DefaultCurrent($self->{Parser});
+}
+
+sub recognized_string {
+  my $self = shift;
+  RecognizedString($self->{Parser});
 }
 
 sub current_line {
@@ -285,7 +290,7 @@ package XML::Parser::Encinfo;
 
 sub DESTROY {
   my $self = shift;
-  FreeEncoding($self);
+  XML::Parser::Expat::FreeEncoding($self);
 }
 
 1;
@@ -301,8 +306,9 @@ XML::Parser::Expat - Lowlevel access to James Clark's expat XML parser
  use XML::Parser::Expat;
 
  $parser = new XML::Parser::Expat;
- $parser->setHandlers('Start' => \&sh, 'End'   => \&eh,
-                      'Default' => \&dh, 'Char' => \&ch);
+ $parser->setHandlers('Start' => \&sh,
+		      'End'   => \&eh,
+                      'Char'  => \&ch);
  open(FOO, 'info.xml') or die "Couldn't open";
  $parser->parse(*FOO);
  close(FOO);
@@ -310,21 +316,19 @@ XML::Parser::Expat - Lowlevel access to James Clark's expat XML parser
 
  sub sh
  {
-     my ($p, $el, %atts) = @_;
-     if ($el eq 'special')
-     {
-	 $p->setHandlers('Default' => \&spec);
-	 $p->default_current;
-     }
-     ...
+   my ($p, $el, %atts) = @_;
+   $p->setHandlers('Char' => \&spec)
+     if ($el eq 'special');
+   ...
  }
 
- sub spec
+ sub eh
  {
-     my ($p, $str) = @_;
-     ...
-     $p->setHandlers('Default' => \&dh);
- }
+   my ($p, $el) = @_;
+   $p->setHandlers('Char' => \&ch)  # Special elements won't contain
+     if ($el eq 'special');         # other special elements
+   ...
+ } 
 
 =head1 DESCRIPTION
 
@@ -551,11 +555,18 @@ Return a name, associated with a given namespace, good for using with the
 above 2 methods. The namespace argument should be the namespace URI, not
 a prefix.
 
+=item recognized_string
+
+Returns the string from the document that was recognized in order to call
+the current handler. For instance, when called from a start handler, it
+will give us the the start-tag string. The string is encoded in UTF-8.
+
 =item default_current
 
 When called from a handler, causes the sequence of characters that generated
 the corresponding event to be sent to the default handler (if one is
-registered).
+registered). Use of this method is deprecated in favor the recognized_string
+method, which you can use without installing a default handler.
 
 =item xpcroak(message)
 

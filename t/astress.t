@@ -6,7 +6,7 @@
 # Change 1..1 below to 1..last_test_to_print .
 # (It may become useful if the test is moved to ./t subdirectory.)
 
-BEGIN {print "1..22\n";}
+BEGIN {print "1..23\n";}
 END {print "not ok 1\n" unless $loaded;}
 use XML::Parser;
 $loaded = 1;
@@ -86,6 +86,9 @@ sub st
     {
 	$tests[7]++;
 	$p->default_current;
+    }
+    elsif ($el eq 'bar') {
+      $tests[22]++ if $p->recognized_string eq '<bar id="jack" stomp="jill">';
     }
 }
 
@@ -198,7 +201,7 @@ else
 
 unlink('zoe.ent') if (-f 'zoe.ent');
 
-for (4 .. 21)
+for (4 .. 22)
 {
     print "not " unless $tests[$_];
     print "ok $_\n";
@@ -215,4 +218,4 @@ if ($cmpstr ne $pos)
 {
     print "not ";
 }
-print "ok 22\n";
+print "ok 23\n";
