@@ -1,0 +1,102 @@
+# Build the Expat PPC static library (with segment model cfmflat supporting a CFM68K shared lib !)  
+
+
+# (1) Compile xmlparse.c:
+
+SC -sym off -includes unix -w off -model cfmflat -mc68020 -d __MacOS_Classic__ -d __SC_Compiler__ ¶
+   -d VERSION="¶"1.95.1¶"" ¶
+   -i : ¶
+   xmlparse.c -o :xmlparse.c.SC.o
+
+
+
+# (2) Compile xmlrole.c:
+
+SC -sym off -includes unix -w off -model cfmflat -mc68020 -d __MacOS_Classic__ -d __SC_Compiler__ ¶
+   -d VERSION="¶"1.95.1¶"" ¶
+   -i : ¶
+   xmlrole.c -o :xmlrole.c.SC.o 
+
+
+# (3) Compile xmltok.c:
+
+SC -sym off -includes unix -w off -model cfmflat -mc68020 -d __MacOS_Classic__ -d __SC_Compiler__ ¶
+   -d VERSION="¶"1.95.1¶"" ¶
+   -i : ¶
+   xmltok.c -o :xmltok.c.SC.o
+
+
+
+# (3) Build a (static) library called Expat.Lib.SC:
+
+Lib -sym off -d -o :Expat.Lib.SC :xmltok.c.SC.o :xmlrole.c.SC.o :xmlparse.c.SC.o
+
+
+
+
+
+
+
+ILink ¶
+	"{SharedLibraries}StdCLib" ¶
+	"{SharedLibraries}InterfaceLib" ¶
+	"{CFM68KLibraries}NuMathLib.o" ¶
+	"{CFM68KLibraries}NuMacRuntime.o" ¶
+	"{CFM68KLibraries}NuToolLibs.o" ¶
+	":xmlparse.c.SC.o" ¶
+    ":xmlrole.c.SC.o" ¶
+	":xmltok.c.SC.o" ¶
+	-sym off ¶
+	-mf -d ¶
+	-model cfmflat ¶
+	-xm sharedlibrary ¶
+	-export XML_Parse ¶
+	-fragname Expat ¶
+	-state rewrite ¶
+	-compact -pad 0 ¶
+	-o Expat.shlb.CFM68K
+# Undefined entry, name: "_$memcpy"
+# Referenced from "XML_Parse" in file "xmlparse.c.SC.o"
+# Undefined entry, name: "_$memmove"
+# Referenced from "XML_GetBuffer" in file "xmlparse.c.SC.o"
+# Undefined entry, name: "_$memcpy"
+# Referenced from "XML_GetBuffer" in file "xmlparse.c.SC.o"
+#
+ILink - Execution terminated!
+
+
+
+# (7) Rename shared lib temporary
+
+Rename -y Expat.shlb.CFM68K Expat.shlb.CFM68K.tmp
+
+
+
+
+
+# (8) Flatten the segmented shared library created by ILink
+
+MakeFlat Expat.shlb.CFM68K.tmp -o Expat.shlb.CFM68K
+
+ 
+
+
+
+# (9) Set the file type and creator of ShiftReg.shlb.CFM68K 
+
+SetFile -t 'shlb' -c 'cfmg' Expat.shlb.CFM68K
+
+
+
+
+
+# (10) Delete the temporary file
+
+Delete -y Expat.shlb.CFM68K.tmp
+
+
+
+
+
+
+

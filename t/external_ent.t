@@ -55,7 +55,8 @@ my %check = (a => "This ('Hurrah for C') is a quote of c",
 
 my $tstcnt = 2;
 
-while ($txt =~ /([ab]) = "(.*)"/g) {
+### while ($txt =~ /([ab]) = "(.*)"/g) {
+while ($txt =~ /([ab]) = "([^\012]*)"/g) {
   my ($k, $v) = ($1, $2);
 
   unless ($check{$k} eq $v) {

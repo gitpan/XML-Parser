@@ -1,0 +1,267 @@
+# INSTRUCTIONS FOR BUILDING THE EXPAT FOR XML-PARSER PPC SHARED LIBRARY FOR MACPERL
+	
+
+# (1) Copy the XML-Parser-2.30-bin-Mac folder from the expanded XML-Parser-2.30-bin-Mac.tar.gz 
+#     archive into the :MacPerl_Src:perl:ext: folder of the MacPerl source distribution. 
+#  
+#     and then
+#
+#     Set the current directory to the :XML-Parser-2.30:Expat: folder (via Directory menu).
+
+
+
+
+# (2) Set the MPW variable 'MPSrc' to the path to your MacPerl_Src folder, for example     
+
+Set MPSrc "MacintoshHD:MacPerl_Src_5.004"     # (change the path accordingly)
+
+
+
+
+# (3) Run the XSUBpp compiler for Expat.xs (ignore warning on prototyping behavior)
+
+perl ::::lib:ExtUtils:xsubpp -typemap ::::lib:ExtUtils:typemap -typemap :typemap  Expat.xs >Expat.tc && Rename -y Expat.tc Expat.c
+# Please specify prototyping behavior for Expat.xs (see perlxs manual)
+
+
+
+# (4) If you like, take a look at the resulting C source file Expat.c
+
+open Expat.c
+
+
+
+# (5) Compile Expat.c (with symbol export for shared lib):
+
+MrC -inclpath ignoresys -sym off -d __STD_C -d MULTIPLICITY  -w off -opt size -t -fatext ¶
+	-d XS_VERSION="¶"2.30¶"" -d VERSION="¶"2.30¶"" ¶
+	-i {MPSrc}: ¶
+	-i {MPSrc}:sfio:include: ¶
+	-i {MPSrc}:GUSI:include: ¶
+	-i {MPSrc}:perl: ¶
+	-i : ¶
+	-i :expat-1.95.1:lib: ¶
+	-shared_lib_export on ¶
+	-export_list Expat.exp "Expat".c
+
+
+
+
+
+
+# (6) Open the file which contains a list of the shared library's exported entry points (symbols).
+#     Delete every line except the last, which is:
+#      
+#	  boot_XML__Parser__Expat
+#
+#     Be sure to save your changes.
+
+open Expat.exp
+
+
+
+
+
+# (7) Link Expat.c.ppc.o as shared lib. 
+
+PPCLink -w -xm sharedlibrary -sym on -@export Expat.exp ¶
+	:Expat.c.ppc.o ¶
+	{MPSrc}:perl:PerlStub ¶
+	{SharedLibraries}InterfaceLib ¶
+	{SharedLibraries}StdCLib ¶
+	{SharedLibraries}MathLib ¶
+	{PPCLibraries}StdCRuntime.o ¶
+	{PPCLibraries}PPCCRuntime.o ¶
+	{PPCLibraries}PPCToolLibs.o ¶
+	:expat-1.95.1:lib:Expat.Lib.MrC ¶
+	-c 'cfmg' -t 'shlb' -fragname "Expat" -o Expat.shlb.PPC 
+
+
+	
+
+# (8) Rename the shared library 'Expat.shlb.PPC' to 'Expat'
+
+Rename -y Expat.shlb.PPC Expat
+
+
+
+#  Done. The shared library 'Expat' must be installed in the ':site_perl:MacPPC:auto:XML:Parser:Expat:' folder.
+
+
+TESTING
+=======
+
+(after correct installation of all modules and the shared lib)
+
+
+directory ::t:
+
+
+
+perl -e '@files = <*.t>;  $str= join("\nperl ", @files); print "perl $str\n";'
+
+perl astress.t
+1..25
+ok 1
+ok 2
+ok 3
+ok 4
+ok 5
+ok 6
+ok 7
+ok 8
+ok 9
+ok 10
+ok 11
+ok 12
+ok 13
+ok 14
+ok 15
+ok 16
+ok 17
+ok 18
+ok 19
+ok 20
+ok 21
+ok 22
+ok 23
+ok 24
+ok 25
+
+perl cdata.t
+1..2
+ok 1
+ok 2
+
+
+perl decl.t
+1..30
+ok 1
+ok 2
+ok 3
+ok 4
+ok 5
+ok 6
+ok 7
+ok 8
+ok 9
+ok 10
+ok 11
+ok 12
+ok 13
+ok 14
+ok 15
+ok 16
+ok 17
+ok 18
+ok 19
+ok 20
+ok 21
+ok 22
+ok 23
+ok 24
+ok 25
+ok 26
+ok 27
+ok 28
+ok 29
+ok 30
+
+
+perl defaulted.t
+1..4
+ok 1
+ok 2
+ok 3
+ok 4
+
+
+perl encoding.t
+1..4
+ok 1
+ok 2
+ok 3
+ok 4
+
+
+perl external_ent.t
+1..5
+ok 1
+ok 2
+ok 3
+ok 4
+ok 5
+
+
+perl file.t
+1..2
+ok 1
+ok 2
+
+
+perl finish.t
+1..3
+ok 1
+ok 2
+ok 3
+
+
+perl namespaces.t
+1..16
+ok 1
+ok 2
+ok 3
+ok 4
+ok 5
+ok 6
+ok 7
+ok 8
+ok 9
+ok 10
+ok 11
+ok 12
+ok 13
+ok 14
+ok 15
+ok 16
+
+perl parament.t
+1..12
+ok 1
+ok 2
+ok 3
+ok 4
+ok 5
+ok 6
+ok 7
+ok 8
+ok 9
+ok 10
+ok 11
+ok 12
+
+
+perl partial.t
+1..3
+ok 1
+ok 2
+ok 3
+
+
+perl skip.t
+1..4
+ok 1
+ok 2
+ok 3
+ok 4
+
+
+perl stream.t
+1..3
+ok 1
+ok 2
+ok 3
+
+
+
+

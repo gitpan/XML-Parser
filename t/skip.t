@@ -40,7 +40,7 @@ my $p = new XML::Parser(Handlers => {Init    => \&init,
 				     Proc    => \&proc
 				     });
 
-$p->parsefile('samples/REC-xml-19980210.xml');
+$p->parsefile('::samples:REC-xml-19980210.xml');
 
 print "not " if $between_count;
 print "ok 2\n";

@@ -1,0 +1,121 @@
+# INSTRUCTIONS FOR BUILDING THE EXPAT FOR XML-PARSER CFM68K SHARED LIBRARY FOR MACPERL
+
+
+# (1) Copy the XML-Parser-2.30-bin-Mac folder from the expanded XML-Parser-2.30-bin-Mac.tar.gz 
+#     archive into the :MacPerl_Src:perl:ext: folder of the MacPerl source distribution. 
+#  
+#     and then
+#
+#     Set the current directory to the :XML-Parser-2.30:Expat: folder (via Directory menu).
+
+
+
+
+# (2) Set the MPW variable 'MPSrc' to the path to your MacPerl_Src folder, for example     
+
+Set MPSrc "MacintoshHD:MacPerl_Src_5.004"     # (change the path accordingly)
+
+
+
+
+
+# (3) Run the XSUBpp compiler for Expat_68K.xs (ignore warning on prototyping behavior)
+
+perl ::::lib:ExtUtils:xsubpp -typemap ::::lib:ExtUtils:typemap -typemap :typemap  Expat_68K.xs >Expat_68K.tc && Rename -y Expat_68K.tc Expat.c
+# Please specify prototyping behavior for Expat_68K.xs (see perlxs manual)
+
+
+
+
+
+# (4) If you like, take a look at the resulting C source file Expat.c
+
+open Expat.c
+
+
+
+
+# (5) Compile Expat.c (with support for shared library model):
+
+# Note: warning 13 is important to see missing prototypes
+
+SC -w 2,3,6,29,35 -d __STD_C -d MULTIPLICITY -d __SC_Compiler__  ¶
+	-d XS_VERSION="¶"2.30¶"" -d VERSION="¶"2.30¶"" ¶
+	-model cfmflat -mc68020 ¶
+	-i {MPSrc}: ¶
+	-i {MPSrc}:sfio:include: ¶
+	-i {MPSrc}:GUSI:include: ¶
+	-i {MPSrc}:perl: ¶
+	-i : ¶
+	-i :expat-1.95.1:lib: ¶
+    -o Expat.c.o Expat.c
+
+
+
+
+# (6) Link Expat.c.o as shared lib.
+
+ILink ¶
+	"{SharedLibraries}StdCLib" ¶
+	"{SharedLibraries}InterfaceLib" ¶
+	"{CFM68KLibraries}NuMathLib.o" ¶
+	"{CFM68KLibraries}NuMacRuntime.o" ¶
+	"{CFM68KLibraries}NuToolLibs.o" ¶
+	{MPSrc}:perl:PerlStub ¶
+	":expat-1.95.1:lib:Expat.Lib.SC" ¶
+	":Expat.c.o" ¶
+	-sym off ¶
+	-mf -d ¶
+	-model cfmflat ¶
+	-xm sharedlibrary ¶
+	-fragname Expat ¶
+	-export boot_XML__Parser__Expat ¶
+	-state rewrite ¶
+	-compact -pad 0 ¶
+	-o Expat.shlb.CFM68K
+
+
+
+# (7) Rename shared lib temporary
+
+Rename -y Expat.shlb.CFM68K Expat.shlb.CFM68K.tmp
+
+
+
+
+
+# (8) Flatten the segmented shared library created by ILink
+
+MakeFlat Expat.shlb.CFM68K.tmp -o Expat.shlb.CFM68K
+
+ 
+
+
+
+# (9) Set the file type and creator of Expat.shlb.CFM68K 
+
+SetFile -t 'shlb' -c 'cfmg' Expat.shlb.CFM68K
+
+
+
+
+
+# (10) Delete the temporary file
+
+Delete -y Expat.shlb.CFM68K.tmp
+
+
+
+
+
+# (11) Rename the shared library 'Expat.shlb.CFM68K' to 'Expat'
+
+Rename -y Expat.shlb.CFM68K Expat
+
+
+
+
+
+
+#  Done. The shared library 'ShiftReg' must be installed in the ':site_perl:MacCFM68K:auto:Bit:ShiftReg' folder.
+

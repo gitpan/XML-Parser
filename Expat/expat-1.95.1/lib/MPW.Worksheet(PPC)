@@ -1,0 +1,37 @@
+# Build the Expat PPC (static) library for Mac OS Classic
+
+
+# (1) Compile xmlparse.c:
+
+MrC -inclpath ignoresys -sym off -w off -opt size -t -fatext -d __MacOS_Classic__ ¶
+    -d VERSION="¶"1.95.1¶"" ¶
+	-i : ¶
+    xmlparse.c 
+
+
+
+# (2) Compile xmlrole.c:
+
+MrC -inclpath ignoresys -sym off -w off -opt size -t -fatext -d __MacOS_Classic__ ¶
+    -d VERSION="¶"1.95.1¶"" ¶
+	-i : ¶
+    xmlrole.c
+
+
+
+# (3) Compile xmltok.c:
+
+MrC -inclpath ignoresys -sym off -w off -opt size -t -fatext -d __MacOS_Classic__ ¶
+    -d VERSION="¶"1.95.1¶"" ¶
+	-i : ¶
+    xmltok.c
+
+
+
+
+# (4) Build a (static) lib called Expat.Lib.MrC:
+
+PPCLink -xm l -sym off -d -o :Expat.Lib.MrC :xmltok.c.ppc.o :xmlrole.c.ppc.o :xmlparse.c.ppc.o
+
+
+
