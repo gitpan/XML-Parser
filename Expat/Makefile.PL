@@ -16,7 +16,11 @@ sub MY::postamble {
   $ret;
 }
 
-$define = '-DXML_DTD ';
+$define = '-DXML_NS -DXML_DTD -DXML_CONTEXT_BYTES=512 ';
+
+$order = ($Config{byteorder} =~ /^12/) ? '12' : '21';
+
+$define .= "-DXML_BYTE_ORDER=$order ";
 
 $define .= ($Config{cc} =~ /cl\.exe/i) ? '/Fo$@' : '-o $@';
 

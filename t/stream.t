@@ -5,14 +5,11 @@ $loaded = 1;
 print "ok 1\n";
 
 my $delim = '------------123453As23lkjlklz877';
-my $file = ':samples:REC-xml-19980210.xml';
+my $file = 'samples/REC-xml-19980210.xml';
 my $tmpfile = 'stream.tmp';
 
 my $cnt = 0;
 
-sub docnt {
-  $cnt++;
-}
 
 open(OUT, ">$tmpfile") or die "Couldn't open $tmpfile for output";
 open(IN, $file) or die "Couldn't open $file for input";
@@ -33,7 +30,7 @@ close(IN);
 close(OUT);
 
 my $parser = new XML::Parser(Stream_Delimiter => $delim,
-			     Handlers => {Comment => \&docnt});
+			     Handlers => {Comment => sub {$cnt++;}});
 
 open(FOO, $tmpfile);
 

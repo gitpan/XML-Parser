@@ -1,8 +1,8 @@
 #!/usr/local/bin/perl -w
 #
-# $Revision: 1.11 $
+# $Revision: 1.12 $
 #
-# $Date: 1999/03/21 22:46:16 $
+# $Date: 1999/09/25 22:27:41 $
 
 use XML::Parser;
 
@@ -281,7 +281,7 @@ sub char_handler
 
     if (length($text)) {
 
-      $text = $xp->xml_escape($text)
+      $text = $xp->xml_escape($text, '>')
 	unless $in_cdata;
 
       print $text;

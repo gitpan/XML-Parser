@@ -2,7 +2,6 @@ package XML::Parser::Expat;
 
 require 5.004;
 
-use English;
 use strict;
 use vars qw($VERSION @ISA %Handler_Setters %Encoding_Table @Encoding_Path
 	    $have_File_Spec);
@@ -13,7 +12,7 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.26" ;
+$VERSION = "2.27" ;
 
 $have_File_Spec = do 'File/Spec.pm';
 
@@ -72,7 +71,7 @@ sub new {
 sub load_encoding {
   my ($file) = @_;
 
-  $file =~ s![^/]+$!\L$&\E!;
+  $file =~ s!([^/]+)$!\L$1\E!;
   $file .= '.enc' unless $file =~ /\.enc$/;
   unless ($file =~ m!^/!) {
     foreach (@Encoding_Path) {
@@ -228,13 +227,13 @@ sub element_index {
 
 sub namespace {
   my ($self, $name) = @_;
-  local($WARNING) = 0;
+  local($^W) = 0;
   $self->{Namespace_List}->[int($name)];
 }
 
 sub eq_name {
   my ($self, $nm1, $nm2) = @_;
-  local($WARNING) = 0;
+  local($^W) = 0;
 
   int($nm1) == int($nm2) and $nm1 eq $nm2;
 }
@@ -377,12 +376,27 @@ sub xml_escape {
   study $text;
   $text =~ s/\&/\&amp;/g;
   $text =~ s/</\&lt;/g;
-  $text =~ s/>/\&gt;/g;
   foreach (@_) {
-    my $rep = '&#' . ord($_) . ';';
-    $text =~ s/$_/$rep/g;
+    if ($_ eq '>') {
+      $text =~ s/>/\&gt;/g;
+    }
+    elsif ($_ eq '"') {
+      $text =~ s/\"/\&quot;/;
+    }
+    elsif ($_ eq "'") {
+      $text =~ s/\'/\&apos;/;
+    }
+    else {
+      my $rep = '&#' . sprintf('x%X', ord($_)) . ';';
+      $text =~ s/$_/$rep/g;
+    }
   }
   $text;
+}
+
+sub skip_until {
+  my $self = shift;
+  SkipUntil($self->{Parser}, $_[0]);
 }
 
 sub release {
@@ -456,15 +470,6 @@ use Carp;
 
 @ISA = qw(XML::Parser::Expat);
 
-sub new {
-  my ($class, %args) = @_;
-
-  my $self = $class->SUPER::new(%args);
-
-  delete $self->{ErrorContext};
-  $self;
-}
-
 sub parse {
   my $self = shift;
   my $class = ref($self);
@@ -481,18 +486,6 @@ sub parsefile {
   my $self = shift;
   my $class = ref($self);
   croak "parsefile method not supported in $class";
-}
-
-sub position_in_context {
-  my $self = shift;
-  my $class = ref($self);
-  croak "position_in_context method not supported in $class";
-}
-
-sub original_string {
-  my $self = shift;
-  my $class = ref($self);
-  croak "original_string method not supported in $class";
 }
 
 sub parse_more {
@@ -645,6 +638,11 @@ Unless standalone is set to "yes" in the XML declaration, setting this to
 a true value allows the external DTD to be read, and parameter entities
 to be parsed and expanded.
 
+=item * Base
+
+The base to use for relative pathnames or URLs. This can also be done by
+using the base method.
+
 =back
 
 =item setHandlers(TYPE, HANDLER [, TYPE, HANDLER [...]])
@@ -747,9 +745,9 @@ parser will close the filehandle after using it.
 
 =item * Entity			(Parser, Name, Val, Sysid, Pubid, Ndata)
 
-This is called when an entity is declared in the internal subset. For
-internal entities, the Val parameter will contain the value and the remaining
-three parameters will be undefined. For external entities, the Val parameter
+This is called when an entity is declared. For internal entities, the Val
+parameter will contain the value and the remaining three parameters will
+be undefined. For external entities, the Val parameter
 will be undefined, the Sysid parameter will have the system id, the Pubid
 parameter will have the public id if it was provided (it will be undefined
 otherwise), the Ndata parameter will contain the notation for unparsed
@@ -761,14 +759,13 @@ set, then this handler will not be called for unparsed entities.
 
 =item * Element			(Parser, Name, Model)
 
-The element handler is called when an element declaration is found in the
-internal subset. Name is the element name, and Model is the content model
-as a string.
+The element handler is called when an element declaration is found. Name is
+the element name, and Model is the content model as a string.
 
 =item * Attlist			(Parser, Elname, Attname, Type, Default, Fixed)
 
-This handler is called for each attribute in an ATTLIST declaration found in
-the internal subset. So an ATTLIST declaration that has multiple attributes
+This handler is called for each attribute in an ATTLIST declaration.
+So an ATTLIST declaration that has multiple attributes
 will generate multiple calls to this handler. The Elname parameter is the
 name of the element with which the attribute is being associated. The Attname
 parameter is the name of the attribute. Type is the attribute type, given as
@@ -889,12 +886,15 @@ NEWBASE is supplied, changes the base to that value.
 
 =item context
 
-Returns a list of element names that represent open
-elements, with the last one being the innermost.
+Returns a list of element names that represent open elements, with the
+last one being the innermost. Inside start and end tag handlers, this
+will be the tag of the parent element.
 
 =item current_element
 
-Returns the name of the innermost currently opened element.
+Returns the name of the innermost currently opened element. Inside
+start or end handlers, returns the parent of the element associated
+with those tags.
 
 =item in_element(NAME)
 
@@ -917,10 +917,18 @@ Returns the size of the context list.
 =item element_index
 
 Returns an integer that is the depth-first visit order of the current
-element. This will be zero outside of the root element. Note that
-in start and end handlers, you're outside of the element that the
-corresponding tags delimit. For example, this would return 0 when
-called from the start handler for the root element start tag.
+element. This will be zero outside of the root element. For example,
+this will return 1 when called from the start handler for the root element
+start tag.
+
+=item skip_until(INDEX)
+
+INDEX is an integer that represents an element index. When this method
+is called, all handlers are suspended until the start tag for an element
+that has an index number equal to INDEX is seen. If a start handler has
+been set, then this is the first tag that the start handler will see
+after skip_until has been called.
+
 
 =item position_in_context(LINES)
 
@@ -989,10 +997,8 @@ XML::Parser::Expat directly, then it's your responsibility to call it.
 =head2 XML::Parser::ExpatNB Methods
 
 The class XML::Parser::ExpatNB is a subclass of XML::Parser::Expat used
-for non-blocking access to the expat library. The Expat methods
-position_in_context and original_string are disabled for this class and
-it doesn't honor the ErrorContext option. It has the following additional
-methods:
+for non-blocking access to the expat library. It does not support the parse,
+parsestring, or parsefile methods, but it does have these additional methods:
 
 =over 4
 

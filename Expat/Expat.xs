@@ -27,21 +27,30 @@
 #define PL_na		na
 #endif
 
-/* #define BUFSIZE 32768 */
-#define BUFSIZE 26624
+#define BUFSIZE 32768
 
 #define NSDELIM  '|'
 
 #define DTB_GROW 4096
 
+/* Macro to update handler fields. Used in the various handler setting
+   XSUBS */
+
 #define XMLP_UPD(fld) \
   RETVAL = cbv->fld ? newSVsv(cbv->fld) : &PL_sv_undef;\
   if (cbv->fld) {\
     if (cbv->fld != fld)\
-      Perl_sv_setsv(cbv->fld, fld);\
+      sv_setsv(cbv->fld, fld);\
   }\
   else\
     cbv->fld = newSVsv(fld)
+
+/* Macro to push old handler value onto return stack. This is done here
+   to get around a bug in 5.004 sv_2mortal function. */
+
+#define PUSHRET \
+  ST(0) = RETVAL;\
+  if (RETVAL != &PL_sv_undef && SvREFCNT(RETVAL)) sv_2mortal(RETVAL)
 
 /* These are flags set in the dflags field. They indicate whether the
    corresponding handler is set. All these handlers actually use expat's
@@ -90,11 +99,9 @@ typedef struct {
   unsigned int st_serial_stacksize;
   unsigned int * st_serial_stack;
 
+  unsigned int skip_until;
+
   SV *recstring;
-  char *buffstrt;
-  int bufflen;
-  int	offset;
-  int prev_offset;
   char * delim;
   STRLEN delimlen;
 
@@ -191,12 +198,14 @@ typedef struct {
 static HV* EncodingTable = NULL;
 
 
-/* Forward declaration */
-static void
-check_and_set_default_handler(XML_Parser parser,
-			      CallbackVector *cbv,
-			      int set,
-			      unsigned int hflag);
+/* Forward declarations */
+static void check_and_set_default_handler(XML_Parser parser,
+					  CallbackVector *cbv,
+					  int set,
+					  unsigned int hflag);
+
+static void suspend_callbacks(CallbackVector *);
+static void resume_callbacks(CallbackVector *);
 
 #if PATCHLEVEL >= 5
 #define mynewSVpv(s,len) newSVpvn((s),(len))
@@ -281,13 +290,12 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
   char *	linebuff;
   STRLEN	lblen;
   STRLEN	br = 0;
+  int		buffsize;
   int		done = 0;
   int		ret = 1;
   char *	msg = NULL;
   CallbackVector * cbv;
   char		*buff = (char *) 0;
-  int		leftover = 0;
-  char		buffer[BUFSIZE];
 
   cbv = (CallbackVector*) XML_GetUserData(parser);
 
@@ -313,7 +321,6 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
 
     if (! SvOK(tline)) {
       lblen = 0;
-
     }
     else {
       char *	chk;
@@ -328,58 +335,33 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
     }
 
     PUTBACK ;
+    buffsize = lblen;
+    done = lblen == 0;
   }
   else {
     tbuff = newSV(0);
     tsiz = newSViv(BUFSIZE);
+    buffsize = BUFSIZE;
   }
 
-  for (cbv->offset = 0, cbv->prev_offset = 0; ! done;)
+  while (! done)
     {
-      int	bufleft;
+      char *buffer = XML_GetBuffer(parser, buffsize);
+
+      if (! buffer)
+	croak("Ran out of memory for input buffer");
 
       SAVETMPS;
 
-      if (buff) {
-	if (cbv->bufflen > (BUFSIZE >> 1)) {
-	  int diff;
-
-	  cbv->prev_offset = cbv->offset;
-	  cbv->offset = XML_GetCurrentByteIndex(parser);
-	  diff = cbv->offset - cbv->prev_offset;
-	  leftover = cbv->bufflen - diff;
-	  if (leftover < 0 || leftover >= BUFSIZE)
-	    croak("parse_stream: bug in parse position calculation");
-	  bufleft = BUFSIZE - leftover;
-	  Move(&buffer[diff], buffer, leftover, char);
-	}
-	else {
-	  leftover = cbv->bufflen;
-	  bufleft = BUFSIZE;
-	}
-	buff = &buffer[leftover];
-	*buff = '\0';
-      }
-      else {
-	leftover = 0;
-	buff = buffer;
-	bufleft = BUFSIZE;
-      }
-
       if (cbv->delim) {
-	br = lblen > bufleft ? bufleft : lblen;
-	if (br)
-          Copy(linebuff, buff, br, char);
-	linebuff += br;
-	lblen -= br;
-	done = lblen <= 0;
+	Copy(linebuff, buffer, lblen, char);
+	br = lblen;
+	done = 1;
       }
       else {
 	int cnt;
 	SV * rdres;
 	char * tb;
-
-	sv_setiv(tsiz, bufleft);
 
 	PUSHMARK(SP);
 	EXTEND(SP, 3);
@@ -402,20 +384,14 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
 
 	tb = SvPV(tbuff, br);
 	if (br > 0)
-	  Copy(tb, buff, br, char);
+	  Copy(tb, buffer, br, char);
+	else
+	  done = 1;
 
 	PUTBACK ;
       }
 
-      if (br == 0) {
-	done = 1;
-      }
-      else {
-	cbv->buffstrt = buffer;
-	cbv->bufflen  = br + leftover;
-      }
-
-      ret = XML_Parse(parser, buff, br, done);
+      ret = XML_ParseBuffer(parser, br, done);
 
       SPAGAIN; /* resync local SP in case callbacks changed global stack */
 
@@ -759,6 +735,9 @@ parse_decl(CallbackVector *cbv, const char *str, int len)
       else if (strnEQ(str, "<![", len)) {
 	cbv->dtdparse_state = PS_Conditional;
       }
+    }
+    else if (strnEQ(str, ">", len)) {
+      goto doctype_end;
     }
     else if (cbv->includesect && strnEQ(str, "]]>", len)) {
       cbv->includesect--;
@@ -1189,10 +1168,30 @@ startElement(void *userData, const char *name, const char **atts)
   CallbackVector* cbv = (CallbackVector*) userData;
   SV ** pcontext;
   unsigned   do_ns = cbv->ns;
+  unsigned   skipping = 0;
   SV ** pnstab;
   SV ** pnslst;
   SV *  elname;
 
+  cbv->st_serial++;
+
+  if (cbv->skip_until) {
+    skipping = cbv->st_serial < cbv->skip_until;
+    if (! skipping) {
+      resume_callbacks(cbv);
+      cbv->skip_until = 0;
+    }
+  }
+
+  if (cbv->st_serial_stackptr >= cbv->st_serial_stacksize) {
+    unsigned int newsize = cbv->st_serial_stacksize + 512;
+
+    Renew(cbv->st_serial_stack, newsize, unsigned int);
+    cbv->st_serial_stacksize = newsize;
+  }
+
+  cbv->st_serial_stack[++cbv->st_serial_stackptr] =  cbv->st_serial;
+  
   if (! cbv->start_seen) {
     /* All of the local handlers deal with stuff in the prolog,
        which we won't see if we've started parsing the root element */
@@ -1209,7 +1208,7 @@ startElement(void *userData, const char *name, const char **atts)
   else
     elname = newSVpv((char *)name, 0);
 
-  if (SvTRUE(cbv->start_sv))
+  if (! skipping && SvTRUE(cbv->start_sv))
     {
       const char **attlim = atts;
 
@@ -1244,15 +1243,6 @@ startElement(void *userData, const char *name, const char **atts)
 
   av_push(cbv->context, elname);
 
-  if (cbv->st_serial_stackptr >= cbv->st_serial_stacksize) {
-    unsigned int newsize = cbv->st_serial_stacksize + 512;
-
-    Renew(cbv->st_serial_stack, newsize, unsigned int);
-    cbv->st_serial_stacksize = newsize;
-  }
-
-  cbv->st_serial_stack[++cbv->st_serial_stackptr] =  ++(cbv->st_serial);
-  
   if (cbv->ns) {
     av_clear(cbv->new_prefix_list);
   }
@@ -1273,7 +1263,7 @@ endElement(void *userData, const char *name)
 
   cbv->st_serial_stackptr--;
 
-  if (SvTRUE(cbv->end_sv))
+  if (! cbv->skip_until && SvTRUE(cbv->end_sv))
     {
       ENTER;
       SAVETMPS;
@@ -1543,8 +1533,6 @@ externalEntityRef(XML_Parser parser,
 
        if (result && (type = SvTYPE(result)) > 0)
          {
-	   char *oldbuff;
-	   int oldoff, oldlen;
 	   XML_Parser entpar;
 	   SV **pval = hv_fetch((HV*) SvRV(cbv->self_sv),
 				  "Parser", 6, 0);
@@ -1557,9 +1545,6 @@ externalEntityRef(XML_Parser parser,
 	   sv_setiv(*pval, (IV) entpar);
 
 	   cbv->p = entpar;
-	   oldbuff = cbv->buffstrt;
-	   oldoff = cbv->offset;
-	   oldlen = cbv->bufflen;
 
 	   if (type == SVt_RV && SvOBJECT(result)) {
 	     ret = parse_stream(entpar, result, 1);
@@ -1573,9 +1558,6 @@ externalEntityRef(XML_Parser parser,
 	     int pret;
 	     char *entstr = SvPV(result, eslen);
 
-	     cbv->buffstrt = entstr;
-	     cbv->offset   = 0;
-	     cbv->bufflen  = eslen;
 	     ret = XML_Parse(entpar, entstr, eslen, 1);
 	   }
 
@@ -1585,9 +1567,6 @@ externalEntityRef(XML_Parser parser,
 	     append_error(entpar, NULL);
 
 	   parse_done = 1;
-	   cbv->buffstrt = oldbuff;
-	   cbv->offset = oldoff;
-	   cbv->bufflen = oldlen;
 	   cbv->p = parser;
 	   sv_setiv(*pval, (IV) parser);
 
@@ -1767,6 +1746,88 @@ recString(void *userData, const char *string, int len)
   }
 }  /* End recString */
 
+static void
+suspend_callbacks(CallbackVector *cbv) {
+  if (SvTRUE(cbv->char_sv)) {
+    XML_SetCharacterDataHandler(cbv->p,
+				(XML_CharacterDataHandler) 0);
+  }
+
+  if (SvTRUE(cbv->proc_sv)) {
+    XML_SetProcessingInstructionHandler(cbv->p,
+					(XML_ProcessingInstructionHandler) 0);
+  }
+
+  if (SvTRUE(cbv->cmnt_sv)) {
+    XML_SetCommentHandler(cbv->p,
+			  (XML_CommentHandler) 0);
+  }
+
+  if (SvTRUE(cbv->startcd_sv)
+      || SvTRUE(cbv->endcd_sv)) {
+    XML_SetCdataSectionHandler(cbv->p,
+			       (XML_StartCdataSectionHandler) 0,
+			       (XML_EndCdataSectionHandler) 0);
+  }
+
+  if (SvTRUE(cbv->unprsd_sv)) {
+    XML_SetUnparsedEntityDeclHandler(cbv->p,
+				     (XML_UnparsedEntityDeclHandler) 0);
+  }
+
+  if (SvTRUE(cbv->notation_sv)) {
+    XML_SetNotationDeclHandler(cbv->p,
+			       (XML_NotationDeclHandler) 0);
+  }
+
+  if (SvTRUE(cbv->extent_sv)) {
+    XML_SetExternalEntityRefHandler(cbv->p,
+				    (XML_ExternalEntityRefHandler) 0);
+  }
+
+  if (cbv->dflags) {
+    XML_SetDefaultHandler(cbv->p,
+			  (XML_DefaultHandler) 0);
+  }
+
+}  /* End suspend_callbacks */
+
+static void
+resume_callbacks(CallbackVector *cbv) {
+  if (SvTRUE(cbv->char_sv)) {
+    XML_SetCharacterDataHandler(cbv->p, characterData);
+  }
+
+  if (SvTRUE(cbv->proc_sv)) {
+    XML_SetProcessingInstructionHandler(cbv->p, processingInstruction);
+  }
+
+  if (SvTRUE(cbv->cmnt_sv)) {
+    XML_SetCommentHandler(cbv->p, commenthandle);
+  }
+
+  if (SvTRUE(cbv->startcd_sv)
+      || SvTRUE(cbv->endcd_sv)) {
+    XML_SetCdataSectionHandler(cbv->p, startCdata, endCdata);
+  }
+
+  if (SvTRUE(cbv->unprsd_sv)) {
+    XML_SetUnparsedEntityDeclHandler(cbv->p, unparsedEntityDecl);
+  }
+
+  if (SvTRUE(cbv->notation_sv)) {
+    XML_SetNotationDeclHandler(cbv->p, notationDecl);
+  }
+
+  if (SvTRUE(cbv->extent_sv)) {
+    XML_SetExternalEntityRefHandler(cbv->p, externalEntityRef);
+  }
+
+  if (cbv->dflags) {
+    XML_SetDefaultHandler(cbv->p, defaulthandle);
+  }
+}  /* End resume_callbacks */
+
 MODULE = XML::Parser::Expat PACKAGE = XML::Parser::Expat	PREFIX = XML_
 
 XML_Parser
@@ -1937,9 +1998,6 @@ XML_ParseString(parser, s)
 
           cbv = (CallbackVector *) XML_GetUserData(parser);
 
-	  cbv->buffstrt = s;
-	  cbv->offset = 0;
-	  cbv->bufflen = len;
 	  RETVAL = XML_Parse(parser, s, len, 1);
 	  SPAGAIN; /* XML_Parse might have changed stack pointer */
 	  if (! RETVAL)
@@ -2013,9 +2071,8 @@ XML_SetStartElementHandler(parser, start_sv)
 	{
 	  CallbackVector * cbv = (CallbackVector*) XML_GetUserData(parser);
 	  XMLP_UPD(start_sv);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetEndElementHandler(parser, end_sv)
@@ -2025,9 +2082,8 @@ XML_SetEndElementHandler(parser, end_sv)
 	{
 	  CallbackVector *cbv = (CallbackVector*) XML_GetUserData(parser);
 	  XMLP_UPD(end_sv);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetCharacterDataHandler(parser, char_sv)
@@ -2043,9 +2099,8 @@ XML_SetCharacterDataHandler(parser, char_sv)
 	    charhndl = characterData;
 
 	  XML_SetCharacterDataHandler(parser, charhndl);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetProcessingInstructionHandler(parser, proc_sv)
@@ -2062,9 +2117,8 @@ XML_SetProcessingInstructionHandler(parser, proc_sv)
 	    prochndl = processingInstruction;
 
 	  XML_SetProcessingInstructionHandler(parser, prochndl);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetCommentHandler(parser, cmnt_sv)
@@ -2080,9 +2134,8 @@ XML_SetCommentHandler(parser, cmnt_sv)
 	    cmnthndl = commenthandle;
 
 	  XML_SetCommentHandler(parser, cmnthndl);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetDefaultHandler(parser, dflt_sv)
@@ -2098,9 +2151,8 @@ XML_SetDefaultHandler(parser, dflt_sv)
 	    set = 1;
 
 	  check_and_set_default_handler(parser, cbv, set, INST_DFL);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetUnparsedEntityDeclHandler(parser, unprsd_sv)
@@ -2117,9 +2169,8 @@ XML_SetUnparsedEntityDeclHandler(parser, unprsd_sv)
 	    unprsdhndl = unparsedEntityDecl;
 
 	  XML_SetUnparsedEntityDeclHandler(parser, unprsdhndl);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetNotationDeclHandler(parser, notation_sv)
@@ -2135,9 +2186,8 @@ XML_SetNotationDeclHandler(parser, notation_sv)
 	    nothndlr = notationDecl;
 
 	  XML_SetNotationDeclHandler(parser, nothndlr);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetExternalEntityRefHandler(parser, extent_sv)
@@ -2154,9 +2204,8 @@ XML_SetExternalEntityRefHandler(parser, extent_sv)
 	    exthndlr = externalEntityRef;
 
 	  XML_SetExternalEntityRefHandler(parser, exthndlr);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 	   
 SV *
 XML_SetEntityDeclHandler(parser, entdcl_sv)
@@ -2172,9 +2221,8 @@ XML_SetEntityDeclHandler(parser, entdcl_sv)
 	    set = 1;
 
 	  check_and_set_default_handler(parser, cbv, set, INST_ENT);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetElementDeclHandler(parser, eledcl_sv)
@@ -2190,9 +2238,8 @@ XML_SetElementDeclHandler(parser, eledcl_sv)
 	    set = 1;
 
 	  check_and_set_default_handler(parser, cbv, set, INST_ELE);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetAttListDeclHandler(parser, attdcl_sv)
@@ -2208,9 +2255,8 @@ XML_SetAttListDeclHandler(parser, attdcl_sv)
 	    set = 1;
 
 	  check_and_set_default_handler(parser, cbv, set, INST_ATT);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetDoctypeHandler(parser, doctyp_sv)
@@ -2226,9 +2272,8 @@ XML_SetDoctypeHandler(parser, doctyp_sv)
 	    set = 1;
 
 	  check_and_set_default_handler(parser, cbv, set, INST_DOC);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetXMLDeclHandler(parser, xmldec_sv)
@@ -2244,9 +2289,8 @@ XML_SetXMLDeclHandler(parser, xmldec_sv)
 	    set = 1;
 
 	  check_and_set_default_handler(parser, cbv, set, INST_XML);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 int
 XML_SetBase(parser, base)
@@ -2266,22 +2310,18 @@ XML_PositionContext(parser, lines)
 	XML_Parser			parser
 	int				lines
     PREINIT:
-	CallbackVector *cbv = (CallbackVector *) XML_GetUserData(parser);
-        char *pos = cbv->buffstrt;
-	char *markbeg, *markend, *limit;
+	int parsepos;
+        int size;
+        const char *pos = XML_GetInputContext(parser, &parsepos, &size);
+	const char *markbeg;
+	const char *limit;
+	const char *markend;
 	int length, relpos;
 	int  cnt;
-	int parsepos = XML_GetCurrentByteIndex(parser) - 1;
 
     PPCODE:
 	  if (! pos)
             return;
-          parsepos -= cbv->offset;
-	  if (parsepos < 0)
-	    parsepos = 0;
-
-	  if (parsepos >= cbv->bufflen)
-	    croak("PositionContext: Parse position is outside of buffer");
 
 	  for (markbeg = &pos[parsepos], cnt = 0; markbeg >= pos; markbeg--)
 	    {
@@ -2296,7 +2336,7 @@ XML_PositionContext(parser, lines)
 	  markbeg++;
 
           relpos = 0;
-	  limit = &pos[cbv->bufflen];
+	  limit = &pos[size];
 	  for (markend = &pos[parsepos + 1], cnt = 0;
 	       markend < limit;
 	       markend++)
@@ -2319,7 +2359,7 @@ XML_PositionContext(parser, lines)
             relpos = length;
 
           EXTEND(sp, 2);
-	  PUSHs(sv_2mortal(mynewSVpv(markbeg, length)));
+	  PUSHs(sv_2mortal(mynewSVpv((char *) markbeg, length)));
 	  PUSHs(sv_2mortal(newSViv(relpos)));
 
 SV *
@@ -2547,24 +2587,11 @@ XML_OriginalString(parser)
 	XML_Parser			parser
     CODE:
 	{
-	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
-	  long parsepos, parselim;
-
-	  if (cbv->buffstrt) {
-	    
-	    parsepos = XML_GetCurrentByteIndex(parser);
-	    parselim = parsepos + XML_GetCurrentByteCount(parser);
-
-	    if (parsepos > parselim)
-	      croak("OriginalString: Parse position > Parse limit");
-
-	    parsepos -= cbv->offset;
-	    parselim -= cbv->offset;
-
-	    if (parsepos < 0 || parselim > cbv->bufflen)
-	      croak("OriginalString: Part of string is outside buffer");
-
-	    RETVAL = mynewSVpv(&cbv->buffstrt[parsepos], parselim - parsepos);
+	  int parsepos, size;
+	  const char *buff = XML_GetInputContext(parser, &parsepos, &size);
+	  if (buff) {
+	    RETVAL = mynewSVpv((char *) &buff[parsepos],
+			       XML_GetCurrentByteCount(parser));
 	  }
 	  else {
 	    RETVAL = newSVpv("", 0);
@@ -2593,9 +2620,8 @@ XML_SetStartCdataHandler(parser, startcd_sv)
 	    ecdhndl = endCdata;
 
 	  XML_SetCdataSectionHandler(parser, scdhndl, ecdhndl);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 SV *
 XML_SetEndCdataHandler(parser, endcd_sv)
@@ -2617,9 +2643,8 @@ XML_SetEndCdataHandler(parser, endcd_sv)
 	    scdhndl = startCdata;
 
 	  XML_SetCdataSectionHandler(parser, scdhndl, ecdhndl);
+	  PUSHRET;
 	}
-    OUTPUT:
-        RETVAL
 
 void
 XML_UnsetAllHandlers(parser)
@@ -2628,33 +2653,17 @@ XML_UnsetAllHandlers(parser)
 	{
 	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 	  
-	  XML_SetElementHandler(parser,
-				(XML_StartElementHandler) 0,
-				(XML_EndElementHandler) 0);
-
+	  suspend_callbacks(cbv);
 	  if (cbv->ns) {
-	    XML_SetNamespaceDeclHandler(parser,
+	    XML_SetNamespaceDeclHandler(cbv->p,
 					(XML_StartNamespaceDeclHandler) 0,
 					(XML_EndNamespaceDeclHandler) 0);
 	  }
 
-	  XML_SetCharacterDataHandler(parser,
-				      (XML_CharacterDataHandler) 0);
-	  XML_SetProcessingInstructionHandler(parser,
-					      (XML_ProcessingInstructionHandler) 0);
-	  XML_SetCommentHandler(parser,
-				(XML_CommentHandler) 0);
-	  XML_SetCdataSectionHandler(parser,
-				     (XML_StartCdataSectionHandler) 0,
-				     (XML_EndCdataSectionHandler) 0);
-	  XML_SetDefaultHandler(parser,
-				(XML_DefaultHandler) 0);
-	  XML_SetUnparsedEntityDeclHandler(parser,
-					    (XML_UnparsedEntityDeclHandler) 0);
-	  XML_SetNotationDeclHandler(parser,
-				     (XML_NotationDeclHandler) 0);
-	  XML_SetExternalEntityRefHandler(parser,
-					  (XML_ExternalEntityRefHandler) 0);
+	  XML_SetElementHandler(parser,
+				(XML_StartElementHandler) 0,
+				(XML_EndElementHandler) 0);
+
 	  XML_SetUnknownEncodingHandler(parser,
 					(XML_UnknownEncodingHandler) 0,
 					(void *) 0);
@@ -2670,3 +2679,16 @@ XML_ElementIndex(parser)
         }
     OUTPUT:
         RETVAL
+
+void
+XML_SkipUntil(parser, index)
+         XML_Parser			parser
+         unsigned int			index
+    CODE:
+        {
+          CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+	  if (index <= cbv->st_serial)
+	    return;
+	  cbv->skip_until = index;
+	  suspend_callbacks(cbv);
+	}

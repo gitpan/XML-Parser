@@ -21,8 +21,10 @@ Expat/expat/sample/elements.c
 Expat/expat/xmlparse/hashtable.c
 Expat/expat/xmlparse/hashtable.h
 Expat/expat/xmlparse/xmlparse.c
+Expat/expat/xmlparse/xmlparse.c.orig
 Expat/expat/xmlparse/xmlparse.dsp
 Expat/expat/xmlparse/xmlparse.h
+Expat/expat/xmlparse/xmlparse.h.orig
 Expat/expat/xmltok/asciitab.h
 Expat/expat/xmltok/dllmain.c
 Expat/expat/xmltok/iasciitab.h
@@ -71,6 +73,9 @@ Parser/Encodings/x-sjis-jdk117.enc	x-sjis-jdk117 encoding map
 Parser/Encodings/x-sjis-jisx0221.enc	x-sjis-jisx0221 encoding map
 Parser/Encodings/x-sjis-unicode.enc	x-sjis-unicode encoding map
 README				Short explanation
+samples/canonical		A utility to generate canonical XML
+samples/canontst.xml		An xml document to demonstrate canonical
+samples/ctest.dtd		An external DTD used by canontst.xml
 samples/REC-xml-19980210.xml	The XML spec in xml form
 samples/xmlcomments		A utility to extract comments
 samples/xmlfilter		A utility to filter elements
@@ -87,4 +92,5 @@ t/foo.dtd			External DTD for parament.t test
 t/namespaces.t			Test script
 t/parament.t			Test script
 t/partial.t			Test script
+t/skip.t			Test script
 t/stream.t			Test script

@@ -13,12 +13,12 @@ use Carp;
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.26';
+  $VERSION = '2.27';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
   eval {
     require 'LWP.pm';
-    require 'URI::URL.pm';
+    require 'URI/URL.pm';
   };
   $have_LWP = not $@;
   if ($have_LWP) {
@@ -590,6 +590,11 @@ XML::Parser - A perl module for parsing XML documents
 
   $p3->parsefile('junk.xml', ErrorContext => 3);
 
+=begin man
+.ds PI PI
+
+=end man
+
 =head1 DESCRIPTION
 
 This module provides ways to parse XML documents. It is built on top of
@@ -743,9 +748,6 @@ If there is a final handler installed, it is executed by the parse_done
 method before returning and the parse_done method returns whatever is
 returned by the final handler.
 
-ExpatNB objects do not handle the position_in_context or original_string
-methods and they do not honor the ErrorContext option.
-
 =back
 
 =head1 HANDLERS
@@ -847,34 +849,32 @@ a relative name, then it is relative to the current working directory.
 
 =head2 Entity		(Expat, Name, Val, Sysid, Pubid, Ndata)
 
-This is called when an entity is declared in the internal subset. For
-internal entities, the Val parameter will contain the value and the remaining
-three parameters will be undefined. For external entities, the Val parameter
-will be undefined, the Sysid parameter will have the system id, the Pubid
-parameter will have the public id if it was provided (it will be undefined
-otherwise), the Ndata parameter will contain the notation for unparsed
-entities. If this is a parameter entity declaration, then a '%' will be
-prefixed to the name.
+This is called when an entity is declared. For internal entities, the Val
+parameter will contain the value and the remaining three parameters will be
+undefined. For external entities, the Val parameter will be undefined, the
+Sysid parameter will have the system id, the Pubid parameter will have the
+public id if it was provided (it will be undefined otherwise), the Ndata
+parameter will contain the notation for unparsed entities. If this is a
+parameter entity declaration, then a '%' will be prefixed to the name.
 
 Note that this handler and the Unparsed handler above overlap. If both are
 set, then this handler will not be called for unparsed entities.
 
 =head2 Element		(Expat, Name, Model)
 
-The element handler is called when an element declaration is found in the
-internal subset. Name is the element name, and Model is the content model
-as a string.
+The element handler is called when an element declaration is found. Name
+is the element name, and Model is the content model as a string.
 
 =head2 Attlist		(Expat, Elname, Attname, Type, Default, Fixed)
 
-This handler is called for each attribute in an ATTLIST declaration found in
-the internal subset. So an ATTLIST declaration that has multiple attributes
-will generate multiple calls to this handler. The Elname parameter is the
-name of the element with which the attribute is being associated. The Attname
-parameter is the name of the attribute. Type is the attribute type, given as
-a string. Default is the default value, which will either be "#REQUIRED",
-"#IMPLIED" or a quoted string (i.e. the returned string will begin and end
-with a quote character). If Fixed is true, then this is a fixed attribute.
+This handler is called for each attribute in an ATTLIST declaration.
+So an ATTLIST declaration that has multiple attributes will generate multiple
+calls to this handler. The Elname parameter is the name of the element with
+which the attribute is being associated. The Attname parameter is the name
+of the attribute. Type is the attribute type, given as a string. Default is
+the default value, which will either be "#REQUIRED", "#IMPLIED" or a quoted
+string (i.e. the returned string will begin and end with a quote character).
+If Fixed is true, then this is a fixed attribute.
 
 =head2 Doctype		(Expat, Name, Sysid, Pubid, Internal)
 

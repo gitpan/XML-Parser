@@ -1,24 +1,31 @@
-BEGIN {print "1..8\n";}
+BEGIN {print "1..10\n";}
 END {print "not ok 1\n" unless $loaded;}
 use XML::Parser;
 $loaded = 1;
 print "ok 1\n";
 
-my $doc =<<'End_of_doc;';
+my $internal_subset =<<'End_of_internal;';
+[
+  <!ENTITY % foo "IGNORE">
+  <!ENTITY % bar "INCLUDE">
+]
+End_of_internal;
+
+my $doc =<<"End_of_doc;";
 <?xml version="1.0" encoding="ISO-8859-1"?>
-<!DOCTYPE foo SYSTEM ":t:foo.dtd"
-  [
-    <!ENTITY % foo "IGNORE">
-    <!ENTITY % bar "INCLUDE">
-  ]
->
+<!DOCTYPE foo SYSTEM "t/foo.dtd"
+$internal_subset>
 <foo>Happy, happy
 <bar>&joy;, &joy;</bar>
 </foo>
 End_of_doc;
 
+chomp $internal_subset;
+
 my $gotinclude = 0;
 my $gotignore = 0;
+my $doctype_called = 0;
+my $internal_matches = 0;
 
 my $bartxt = '';
 
@@ -50,11 +57,19 @@ sub attl {
   $gotignore = 1 if ($el eq 'foo' and $att eq 'top' and $dflt eq '"hello"');
 }
 
+sub dtd {
+  my ($xp, $name, $sysid, $pubid, $internal) = @_;
+
+  $doctype_called = 1;
+  $internal_matches = $internal eq $internal_subset;
+}
+
 $p = new XML::Parser(ParseParamEnt => 1,
 		     ErrorContext  => 2,
 		     Handlers => {Start   => \&start,
 				  Char    => \&char,
-				  Attlist => \&attl
+				  Attlist => \&attl,
+				  Doctype => \&dtd
 				 }
 		    );
 
@@ -69,13 +84,19 @@ print "ok 6\n";
 print "not " if $gotignore;
 print "ok 7\n";
 
+print "not " unless $doctype_called;
+print "ok 8\n";
+
+print "not " unless $internal_matches;
+print "ok 9\n";
+
 $doc =~ s/[\s\n]+\[[^]]*\][\s\n]+//m;
 
 $p->setHandlers(Start => sub {
 		          my ($xp,$el,%atts) = @_;
 			  if ($el eq 'foo') {
 			    print "not " unless defined($atts{zz});
-			    print "ok 8\n";
+			    print "ok 10\n";
 			  }
 			});
 

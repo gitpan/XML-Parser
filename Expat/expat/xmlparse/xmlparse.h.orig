@@ -506,19 +506,6 @@ Returns 0 if the event is in an internal entity. */
 
 int XMLPARSEAPI XML_GetCurrentByteCount(XML_Parser parser);
 
-/* If XML_CONTEXT_BYTES is defined, returns the input buffer, sets
-   the integer pointed to by offset to the offset within this buffer
-   of the current parse position, and sets the integer pointed to by size
-   to the size of this buffer (the number of input bytes). Otherwise
-   returns a null pointer. Also returns a null pointer if a parse isn't active.
-
-   NOTE: The character pointer returned should not be used outside
-   the handler that makes the call. */
-
-const char XMLPARSEAPI * XML_GetInputContext(XML_Parser parser,
-					     int *offset,
-					     int *size);
-
 /* For backwards compatibility with previous versions. */
 #define XML_GetErrorLineNumber XML_GetCurrentLineNumber
 #define XML_GetErrorColumnNumber XML_GetCurrentColumnNumber

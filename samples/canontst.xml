@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE ctest SYSTEM "ctest.dtd">
+<ctest xmlns:x="urn:1" xmlns:y="urn:2" version='0.5'>
+  <x:e a="a"/>
+  <foo xmlns='urn:3' z="hello" y:b="there" k="world">
+    <bar/>
+  </foo>
+  <la y:b='b'  a='tab->(	)    qtab->(&#x9;) junk   '/>
+</ctest>

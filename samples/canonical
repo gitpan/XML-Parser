@@ -1,0 +1,100 @@
+#!/usr/local/bin/perl -w
+#
+# Copyright 1999 Clark Cooper <coopercc@netheaven.com>
+# All rights reserved.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the same terms as Perl itself.
+#
+# $Revision: 1.1 $
+#
+# $Date: 1999/09/25 22:27:40 $
+#
+#	This program take an XML document on the standard input and
+#	generates the corresponding canonical XML document on the
+#	standard output. The definition of "Canonical XML" that I'm
+#	using is taken from the working draft published by W3C on
+#	29-July-1999:
+#
+#		http://www.w3.org/1999/07/WD-xml-c14n-19990729
+#
+#	The latest version of this document is at:
+#
+#		http://www.w3.org/TR/xml-c14n
+#
+
+use XML::Parser;
+
+my $p = new XML::Parser(ErrorContext  => 2,
+			Namespaces    => 1,
+			ParseParamEnt => 1,
+			Handlers      => {Start => \&sthndl,
+					  End   => \&endhndl,
+					  Char  => \&chrhndl
+					 }
+			);
+
+$p->parse(*STDIN);
+print "\n";
+
+################
+## End main
+################
+
+sub sthndl {
+  my $xp = shift;
+  my $el = shift;
+
+  my $ns_index = 1;
+
+  my $elns = $xp->namespace($el);
+  if (defined $elns) {
+    my $pfx = 'n' . $ns_index++;
+    print "<$pfx:$el xmlns:$pfx=\"$elns\"";
+  }
+  else {
+    print "<$el";
+  }
+
+  if (@_) {
+    for (my $i = 0; $i < @_; $i += 2) {
+      my $nm = $_[$i];
+      my $ns = $xp->namespace($nm);
+      $_[$i] = defined($ns) ? "$ns\01$nm" : "\01$nm";
+    }
+
+    my %atts = @_;
+    my @ids = sort keys %atts;
+    foreach my $id (@ids) {
+      my ($ns, $nm) = split(/\01/, $id);
+      my $val = $xp->xml_escape($atts{$id}, '"', "\x9", "\xA", "\xD");
+      if (length($ns)) {
+	my $pfx = 'n' . $ns_index++;
+	print " $pfx:$nm=\"$val\" xmlns:$pfx=\"$ns\"";
+      }
+      else {
+	print " $nm=\"$val\"";
+      }
+    }
+  }
+
+  print '>';
+}  # End sthndl
+
+sub endhndl {
+  my ($xp, $el) = @_;
+
+  my $nm = $xp->namespace($el) ? "n1:$el" : $el;
+  print "</$nm>";
+}  # End endhndl
+
+sub chrhndl {
+  my ($xp, $data) = @_;
+
+  print $xp->xml_escape($data, '>', "\xD");
+}  # End chrhndl
+
+# Tell emacs that this is really a perl script
+#Local Variables:
+#Mode: perl
+#End:
