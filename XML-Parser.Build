@@ -1,0 +1,131 @@
+# build XML-Parser-2.27
+
+perl Makefile.PL
+Checking if your kit is complete...
+Looks good
+Writing Makefile.mk for XML::Parser::Expat
+Writing Makefile.mk for XML::Parser
+
+Directory Expat
+
+# edited Makefile.mk
+dmake -n dynamic -f Makefile.mk > mymake.out
+
+# results in:
+perl -I::::lib: ::::lib:ExtUtils:xsubpp  -noprototypes Expat.xs >xstmp.c && ¶
+Rename -y xstmp.c :Expat.c
+
+Set SrcPPC ":Expat.c :expat:xmltok:xmltok.c :expat:xmltok:xmlrole.c"
+Set SrcPPC "{SrcPPC} :expat:xmlparse:xmlparse.c :expat:xmlparse:hashtable.c"
+
+MWCPPC -nosyspath -sym on -d MULTIPLICITY -i- -i : ¶
+-i :expat:xmlparse: -i :expat:xmltok: ¶
+-i ":::::sfio:"include: -i ":::::GUSI:"include: ¶
+-i "Tallinn:Metrowerks:CodeWarrior¶ MPW:Interfaces&Libraries:Interfaces:MWCIncludes:" ¶
+-d XML_NS -d XML_DTD -d XML_CONTEXT_BYTES=512 -d XML_BYTE_ORDER=21 ¶
+-i :::: -i- -i : -w off -traceback -opt all -t -ext .PPC.o {SrcPPC} -o :Obj:
+
+Time to compile 'Expat.c': 64.38 seconds
+Time to compile 'xmltok.c': 42.12 seconds
+Time to compile 'xmlrole.c': 8.95 seconds
+Time to compile 'xmlparse.c': 25.97 seconds
+Time to compile 'hashtable.c': 7.42 seconds
+
+perl "-I::::lib:" -e 'use ExtUtils::Mksymlists; Mksymlists("NAME" => "XML::Parser::Expat", "DL_FUNCS" => {  }, "DL_VARS" => []);'
+
+MWLinkPPC -xm sharedlibrary -sym on -msg nodup -@export Expat.exp -name Expat ¶
+-o Expat.shlb.PPC ¶
+:Obj:Expat.c.PPC.o :Obj:xmltok.c.PPC.o :Obj:xmlrole.c.PPC.o ¶
+:Obj:xmlparse.c.PPC.o :Obj:hashtable.c.PPC.o ¶
+"{MWPPCLibraries}MathLib" ¶
+::::PerlStub ¶
+"{MWPPCLibraries}InterfaceLib" ¶
+"{MWPPCLibraries}MSL RuntimePPC.Lib" ¶
+"{MWPPCLibraries}MSL C.PPC.Lib"
+
+Set SrcCFM68K ":Expat.c :expat:xmltok:xmltok.c :expat:xmltok:xmlrole.c"
+Set SrcCFM68K "{SrcCFM68K} :expat:xmlparse:xmlparse.c :expat:xmlparse:hashtable.c"
+
+MWC68K -nosyspath -sym on -d MULTIPLICITY -i- -i : ¶
+-i :expat:xmlparse: -i :expat:xmltok: ¶
+-i ":::::sfio:"include: -i ":::::GUSI:"include: ¶
+-i "Tallinn:Metrowerks:CodeWarrior¶ MPW:Interfaces&Libraries:Interfaces:MWCIncludes:" ¶
+-d XML_NS -d XML_DTD -d XML_CONTEXT_BYTES=512 -d XML_BYTE_ORDER=21 ¶
+-i :::: -i- -i : -w off -indirect -mc68020 -model CFMflatdf -pragma "export on" ¶
+-model far -opt off -t -ext .CFM68K.o {SrcCFM68K} -o :Obj:
+
+Time to compile 'Expat.c': 24.58 seconds
+Time to compile 'xmltok.c': 22.42 seconds
+Time to compile 'xmlrole.c': 6.68 seconds
+Time to compile 'xmlparse.c': 15.00 seconds
+Time to compile 'hashtable.c': 7.65 seconds
+
+MWLink68K -xm sharedlibrary -sym on -msg nodup -@export Expat.exp -name Expat ¶
+-o Expat.shlb.CFM68K :Obj:Expat.c.CFM68K.o ¶
+:Obj:xmltok.c.CFM68K.o :Obj:xmlrole.c.CFM68K.o ¶
+:Obj:xmlparse.c.CFM68K.o :Obj:hashtable.c.CFM68K.o ¶
+"{MW68KLibraries}MathLibCFM68K Fa(4i_8d).Lib" ¶
+::::PerlStub ¶
+"{MW68KLibraries}InterfaceLib" ¶
+"{MW68KLibraries}MSL C.CFM68K Fa(4i_8d).Lib" ¶
+"{MW68KLibraries}MSL MWRuntimeLibCFM68K" ¶
+"{MW68KLibraries}MSL ShLibRuntimeCFM68K.Lib"
+
+# installation (local)
+dmake -n install_dynamic -f Makefile.mk > install.out
+
+Directory ::
+:::InstallBLIB "XML::Parser::Expat" "perl -e 'use File::Path; mkpath(\@ARGV, 1);'" :Expat:Expat.pm :Expat:Expat.xs
+
+Skipping :Expat:Expat.xs, which doesn't contain any pod.
+mkdir :blib
+mkdir :blib:lib
+mkdir :blib:lib:XML
+mkdir :blib:lib:XML:Parser
+mkdir :blib:lib:XML:Parser::Expat:
+
+perl -e 'use File::Path; mkpath(\@ARGV, 1);' :blib:lib:MacPPC:auto:XML:Parser:Expat: :blib:lib:MacCFM68K:auto:XML:Parser:Expat:
+mkdir :blib:lib:MacPPC
+mkdir :blib:lib:MacPPC:auto
+mkdir :blib:lib:MacPPC:auto:XML
+mkdir :blib:lib:MacPPC:auto:XML:Parser
+mkdir :blib:lib:MacPPC:auto:XML:Parser:Expat:
+mkdir :blib:lib:MacCFM68K
+mkdir :blib:lib:MacCFM68K:auto
+mkdir :blib:lib:MacCFM68K:auto:XML
+mkdir :blib:lib:MacCFM68K:auto:XML:Parser
+mkdir :blib:lib:MacCFM68K:auto:XML:Parser:Expat:
+
+Duplicate -y :Expat:Expat.shlb.PPC :blib:lib:MacPPC:auto:XML:Parser:Expat:Expat
+Duplicate -y :Expat:Expat.shlb.CFM68K :blib:lib:MacCFM68K:auto:XML:Parser:Expat:Expat
+
+# fix up the blib after adding the encodings
+
+# testing
+Files t
+perl -I ':blib:lib' :t:astress.t
+1..24 AOK
+perl -I ':blib:lib' :t:cdata.t
+1..2 AOK
+perl -I ':blib:lib' :t:decl.t
+1..19 AOK
+perl -I ':blib:lib' :t:defaulted.t
+1..4 AOK
+perl -I ':blib:lib' :t:encoding.t
+1..4 AOK
+perl -I ':blib:lib' :t:external_ent.t
+1..5 AOK
+perl -I ':blib:lib' :t:file.t
+1..2 AOK
+perl -I ':blib:lib' :t:finish.t
+1..3 AOK
+perl -I ':blib:lib' :t:namespaces.t
+1..16 AOK
+perl -I ':blib:lib' :t:parament.t
+1..10 AOK
+perl -I ':blib:lib' :t:partial.t
+1..3 AOK
+perl -I ':blib:lib' :t:skip.t
+1..4 AOK
+perl -I ':blib:lib' :t:stream.t
+1..3 AOK
