@@ -13,7 +13,7 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.20" ;
+$VERSION = "2.21" ;
 $Attdef_Flag = 1 << 30;
 
 my $namespace_mask = $Attdef_Flag - 1;
@@ -59,8 +59,12 @@ sub new {
   $args{Used} = 0;
   $args{Context} = [];
   $args{Namespaces} ||= 0;
-  $args{Namespace_Table} = {};
-  $args{Namespace_List} = [undef];
+  if ($args{Namespaces}) {
+    $args{Namespace_Table} = {};
+    $args{Namespace_List} = [undef];
+    $args{Prefix_Table} = {};
+    $args{New_Prefixes} = [];
+  }
   $args{_Setters} = \%Handler_Setters;
   $args{Parser} = ParserCreate($self, $args{ProtocolEncoding},
 			       $args{Namespaces});
@@ -213,6 +217,9 @@ sub element_index {
   ElementIndex($self->{Parser});
 }
 
+################
+# Namespace methods
+
 sub namespace {
   my ($self, $name) = @_;
   local($WARNING) = 0;
@@ -235,6 +242,81 @@ sub generate_ns_name {
 		   $self->{Namespace_List})
       : $name;
 }
+
+sub new_ns_prefixes {
+  my ($self) = @_;
+  if ($self->{Namespaces}) {
+    return @{$self->{New_Prefixes}};
+  }
+  return ();
+}
+
+sub expand_ns_prefix {
+  my ($self, $prefix) = @_;
+
+  if ($self->{Namespaces}) {
+    my $stack = $self->{Prefix_Table}->{$prefix};
+    return (defined($stack) and @$stack) ? $stack->[-1] : undef;
+  }
+
+  return undef;
+}
+
+sub current_ns_prefixes {
+  my ($self) = @_;
+
+  if ($self->{Namespaces}) {
+    my %set = %{$self->{Prefix_Table}};
+
+    if (exists $set{'#default'} and not defined($set{'#default'}->[-1])) {
+      delete $set{'#default'};
+    }
+
+    return keys %set;
+  }
+
+  return ();
+}
+
+
+################################################################
+# Namespace declaration handlers
+#
+
+sub NamespaceStart {
+  my ($self, $prefix, $uri) = @_;
+
+  $prefix = '#default' unless defined $prefix;
+  my $stack = $self->{Prefix_Table}->{$prefix}; 
+
+  if (defined $stack) {
+    push(@$stack, $uri);
+  }
+  else {
+    $self->{Prefix_Table}->{$prefix} = [$uri];
+  }
+
+  # The New_Prefixes list gets emptied at end of startElement function
+  # in Expat.xs
+
+  push(@{$self->{New_Prefixes}}, $prefix);
+}
+
+sub NamespaceEnd {
+  my ($self, $prefix) = @_;
+
+  $prefix = '#default' unless defined $prefix;
+
+  my $stack = $self->{Prefix_Table}->{$prefix};
+  if (@$stack > 1) {
+    pop(@$stack);
+  }
+  else {
+    delete $self->{Prefix_Table}->{$prefix};
+  }
+}
+
+################
 
 sub is_defaulted {
   my ($self, $attname) = @_;
@@ -268,6 +350,21 @@ sub position_in_context {
   }
   
   $ret;
+}
+
+sub xml_escape {
+  my $self = shift;
+  my $text = shift;
+
+  study $text;
+  $text =~ s/\&/\&amp;/g;
+  $text =~ s/</\&lt;/g;
+  $text =~ s/>/\&gt;/g;
+  foreach (@_) {
+    my $rep = '&#' . ord($_) . ';';
+    $text =~ s/$_/$rep/g;
+  }
+  $text;
 }
 
 sub release {
@@ -612,6 +709,25 @@ Return a name, associated with a given namespace, good for using with the
 above 2 methods. The namespace argument should be the namespace URI, not
 a prefix.
 
+=item new_ns_prefixes
+
+When called from a start tag handler, returns namespace prefixes declared
+with this start tag. If called elsewere (or if there were no namespace
+prefixes declared), it returns an empty list. Setting of the default
+namespace is indicated with '#default' as a prefix.
+
+=item expand_ns_prefix(prefix)
+
+Return the uri to which the given prefix is currently bound. Returns
+undef if the prefix isn't currently bound. Use '#default' to find the
+current binding of the default namespace (if any).
+
+=item current_ns_prefixes
+
+Return a list of currently bound namespace prefixes. The order of the
+the prefixes in the list has no meaning. If the default namespace is
+currently bound, '#default' appears in the list.
+
 =item recognized_string
 
 Returns the string from the document that was recognized in order to call
@@ -700,6 +816,12 @@ called from the start handler for the root element start tag.
 Returns a string that shows the current parse position. LINES should be
 an integer >= 0 that represents the number of lines on either side of the
 current parse line to place into the returned string.
+
+=item xml_escape(TEXT [, CHAR [, CHAR ...]])
+
+Returns TEXT with markup characters turned into character entities. Any
+additional characters provided as arguments are also turned into character
+references where found in TEXT.
 
 =item parse (SOURCE)
 

@@ -14,7 +14,7 @@ use Carp;
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.20';
+  $VERSION = '2.21';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
 }
@@ -623,8 +623,9 @@ subclassing XML::Parser.
 
 This method registers handlers for various parser events. It overrides any
 previous handlers registered through the Style or Handler options or through
-earlier calls to setHandlers. See a description of the handler types in
-L<"HANDLERS">.
+earlier calls to setHandlers. By providing a false or undefined value as
+the handler, the existing handler can be unset. See a description of the
+handler types in L<"HANDLERS">.
 
 =item parse(SOURCE [, OPT => OPT_VALUE [...]])
 

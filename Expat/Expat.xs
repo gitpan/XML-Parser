@@ -10,8 +10,8 @@
 */
 
 #include "EXTERN.h"
-#include "XSUB.h"
 #include "perl.h"
+#include "XSUB.h"
 #include "patchlevel.h"
 #include "xmlparse.h"
 #include "encoding.h"
@@ -27,8 +27,7 @@
 #define PL_na		na
 #endif
 
-/* #define BUFSIZE 32768 */
-#define BUFSIZE 24576
+#define BUFSIZE 32768
 
 #define NSDELIM  '|'
 
@@ -76,6 +75,8 @@ typedef enum {
 typedef struct {
   SV* self_sv;
   XML_Parser p;
+
+  AV* new_prefix_list;
 
   unsigned int st_serial;
   unsigned int st_serial_stackptr;
@@ -174,6 +175,7 @@ typedef struct {
 static long AttDefaultFlag = 0;
 
 static HV* EncodingTable = NULL;
+
 
 /* Forward declaration */
 static void
@@ -1112,6 +1114,9 @@ startElement(void *userData, const char *name, const char **atts)
 
   cbv->st_serial_stack[++cbv->st_serial_stackptr] =  ++(cbv->st_serial);
   
+  if (cbv->ns) {
+    av_clear(cbv->new_prefix_list);
+  }
 } /* End startElement */
 
 static void
@@ -1201,6 +1206,31 @@ endCdata(void *userData)
     perl_call_sv(cbv->endcd_sv, G_DISCARD);
   }
 }  /* End endCdata */
+
+static void
+nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
+  dSP;
+  CallbackVector* cbv = (CallbackVector*) userdata;
+
+  PUSHMARK(sp);
+  XPUSHs(cbv->self_sv);
+  XPUSHs(prefix ? sv_2mortal(newSVpv((char *)prefix, 0)) : &PL_sv_undef);
+  XPUSHs(uri ? sv_2mortal(newSVpv((char *)uri, 0)) : &PL_sv_undef);
+  PUTBACK;
+  perl_call_method("NamespaceStart", G_DISCARD);
+}  /* End nsStart */
+
+static void
+nsEnd(void *userdata, const XML_Char *prefix) {
+  dSP;
+  CallbackVector* cbv = (CallbackVector*) userdata;
+
+  PUSHMARK(sp);
+  XPUSHs(cbv->self_sv);
+  XPUSHs(prefix ? sv_2mortal(newSVpv((char *)prefix, 0)) : &PL_sv_undef);
+  PUTBACK;
+  perl_call_method("NamespaceEnd", G_DISCARD);
+}  /* End nsEnd */
 
 static void
 defaulthandle(void *userData, const char *string, int len)
@@ -1570,7 +1600,17 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 
 	  if (namespaces)
 	    {
+	      SV **npl;
+
+	      npl = hv_fetch((HV*)SvRV(cbv->self_sv), "New_Prefixes", 12, 0);
+
+	      if (! npl || ! *npl || !SvROK(*npl))
+	        croak("XML::Parser instance missing New_Prefixes attribute");
+
+	      cbv->new_prefix_list = (AV *) SvRV(*npl);
+
 	      RETVAL = XML_ParserCreateNS(enc, NSDELIM);
+	      XML_SetNamespaceDeclHandler(RETVAL,nsStart, nsEnd);
 	    }
 	    else
 	    {
@@ -1611,7 +1651,7 @@ XML_ParserFree(parser)
 	  /* (Note that self_sv must already be taken care of
 	     or we couldn't be here */
 
-	  if (cbv->recstring && SvREFCNT(cbv->recstring))
+	  if (cbv->recstring)
 	    SvREFCNT_dec(cbv->recstring);
 
 	  if (cbv->start_sv)
@@ -2095,8 +2135,7 @@ XML_RecognizedString(parser)
 	  }
 	  else {
 	    if (cbv->recstring) {
-	      SvREFCNT_dec(cbv->recstring);
-	      cbv->recstring = 0;
+	      sv_setpvn(cbv->recstring, "", 0);
 	    }
 
 	    if (cbv->no_expand)
@@ -2111,7 +2150,7 @@ XML_RecognizedString(parser)
 	    else
 	      XML_SetDefaultHandlerExpand(parser,
 					  cbv->dflags ? defaulthandle : 0);
-	    RETVAL = cbv->recstring;
+	    RETVAL = newSVsv(cbv->recstring);
 	  }
 	}
     OUTPUT:
@@ -2328,9 +2367,18 @@ XML_UnsetAllHandlers(parser)
 	XML_Parser			parser
     CODE:
 	{
+	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+	  
 	  XML_SetElementHandler(parser,
 				(XML_StartElementHandler) 0,
 				(XML_EndElementHandler) 0);
+
+	  if (cbv->ns) {
+	    XML_SetNamespaceDeclHandler(parser,
+					(XML_StartNamespaceDeclHandler) 0,
+					(XML_EndNamespaceDeclHandler) 0);
+	  }
+
 	  XML_SetCharacterDataHandler(parser,
 				      (XML_CharacterDataHandler) 0);
 	  XML_SetProcessingInstructionHandler(parser,

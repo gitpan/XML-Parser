@@ -1,22 +1,9 @@
-*** expat/xmlparse/xmlparse.c.orig	Sun Dec 27 10:00:12 1998
---- expat/xmlparse/xmlparse.c	Sat Feb 20 21:32:25 1999
+*** expat/xmlparse/xmlparse.c.orig	Sun Mar  7 10:33:46 1999
+--- expat/xmlparse/xmlparse.c	Sat Mar 13 14:23:36 1999
 ***************
-*** 72,77 ****
---- 72,81 ----
-  
-  #define EXPAND_SPARE 24
-  
-+ /* On macintosh, '\n' may get translated to 0xD instead of 0xA */
-+ #define CR '\015'
-+ #define LF '\012'
-+ 
-  typedef struct binding {
-    struct prefix *prefix;
-    struct binding *nextTagBinding;
-***************
-*** 820,825 ****
---- 824,836 ----
-    return -1;
+*** 837,842 ****
+--- 837,849 ----
+    return errorCode;
   }
   
 + long XML_GetCurrentByteLimit(XML_Parser parser)
@@ -26,29 +13,36 @@
 +   return -1;
 + }
 + 
-  int XML_GetCurrentLineNumber(XML_Parser parser)
+  long XML_GetCurrentByteIndex(XML_Parser parser)
   {
-    if (eventPtr) {
+    if (eventPtr)
 ***************
-*** 1013,1019 ****
-        }
-        *eventEndPP = end;
-        if (characterDataHandler) {
-! 	XML_Char c = XML_T('\n');
-  	characterDataHandler(handlerArg, &c, 1);
-        }
-        else if (defaultHandler)
---- 1024,1030 ----
-        }
-        *eventEndPP = end;
-        if (characterDataHandler) {
-! 	XML_Char c = XML_T(LF);
-  	characterDataHandler(handlerArg, &c, 1);
-        }
-        else if (defaultHandler)
+*** 1180,1188 ****
+  	tag->rawName = s + enc->minBytesPerChar;
+  	tag->rawNameLength = XmlNameLength(enc, tag->rawName);
+  	if (nextPtr) {
+! 	  // Need to guarantee that:
+! 	  // tag->buf + ROUND_UP(tag->rawNameLength, sizeof(XML_Char)) <= tag->bufEnd - sizeof(XML_Char) 
+! 	  if (tag->rawNameLength + (int)(sizeof(XML_Char) - 1) + (int)sizeof(XML_Char) > tag->bufEnd - tag->buf) {
+  	    int bufSize = tag->rawNameLength * 4;
+  	    bufSize = ROUND_UP(bufSize, sizeof(XML_Char));
+  	    tag->buf = realloc(tag->buf, bufSize);
+--- 1187,1198 ----
+  	tag->rawName = s + enc->minBytesPerChar;
+  	tag->rawNameLength = XmlNameLength(enc, tag->rawName);
+  	if (nextPtr) {
+! 	  /* Need to guarantee that:
+! 	  ** tag->buf + ROUND_UP(tag->rawNameLength, sizeof(XML_Char))
+!           **      <= tag->bufEnd - sizeof(XML_Char)
+! 	  **/
+! 	  if (tag->rawNameLength + (int)(sizeof(XML_Char) - 1)
+! 	      + (int)sizeof(XML_Char) > tag->bufEnd - tag->buf) {
+  	    int bufSize = tag->rawNameLength * 4;
+  	    bufSize = ROUND_UP(bufSize, sizeof(XML_Char));
+  	    tag->buf = realloc(tag->buf, bufSize);
 ***************
-*** 1168,1173 ****
---- 1179,1185 ----
+*** 1195,1200 ****
+--- 1205,1211 ----
   	}
   	++tagLevel;
   	if (startElementHandler) {
@@ -57,12 +51,14 @@
   	  XML_Char *toPtr;
   	  for (;;) {
 ***************
-*** 1197,1202 ****
---- 1209,1220 ----
+*** 1224,1229 ****
+--- 1235,1248 ----
   	  if (result)
   	    return result;
-  	  startElementHandler(handlerArg, tag->name, (const XML_Char **)atts);
-+ 	  for (i = 0; i < attsSize; i += 2) {
+  	  startElementHandler(handlerArg, tag->name.str, (const XML_Char **)atts);
++ 	  for (i = 0;
++ 	       i < attsSize * (sizeof(ATTRIBUTE)/sizeof(XML_Char **));
++ 	       i += 2) {
 + 	    if (! ((XML_Char **) atts)[i])
 + 	      break;
 + 
@@ -72,23 +68,25 @@
   	}
   	else {
 ***************
-*** 1228,1235 ****
+*** 1255,1262 ****
   	if (result)
   	  return result;
   	poolFinish(&tempPool);
 ! 	if (startElementHandler)
-  	  startElementHandler(handlerArg, name, (const XML_Char **)atts);
+  	  startElementHandler(handlerArg, name.str, (const XML_Char **)atts);
   	if (endElementHandler) {
   	  if (startElementHandler)
   	    *eventPP = *eventEndPP;
---- 1246,1261 ----
+--- 1274,1291 ----
   	if (result)
   	  return result;
   	poolFinish(&tempPool);
 ! 	if (startElementHandler) {
 ! 	  int i;
-  	  startElementHandler(handlerArg, name, (const XML_Char **)atts);
-+ 	  for (i = 0; i < attsSize; i += 2) {
+  	  startElementHandler(handlerArg, name.str, (const XML_Char **)atts);
++ 	  for (i = 0;
++ 	       i < attsSize * (sizeof(ATTRIBUTE)/sizeof(XML_Char **));
++ 	       i += 2) {
 + 	    if (! ((XML_Char **) atts)[i])
 + 	      break;
 + 
@@ -99,24 +97,7 @@
   	  if (startElementHandler)
   	    *eventPP = *eventEndPP;
 ***************
-*** 1299,1305 ****
-        return XML_ERROR_MISPLACED_XML_PI;
-      case XML_TOK_DATA_NEWLINE:
-        if (characterDataHandler) {
-! 	XML_Char c = XML_T('\n');
-  	characterDataHandler(handlerArg, &c, 1);
-        }
-        else if (defaultHandler)
---- 1325,1331 ----
-        return XML_ERROR_MISPLACED_XML_PI;
-      case XML_TOK_DATA_NEWLINE:
-        if (characterDataHandler) {
-! 	XML_Char c = XML_T(LF);
-  	characterDataHandler(handlerArg, &c, 1);
-        }
-        else if (defaultHandler)
-***************
-*** 1513,1526 ****
+*** 1551,1564 ****
   	      return XML_ERROR_NO_MEMORY;
   	  }
             else {
@@ -131,7 +112,7 @@
   	  appAtts[attIndex++] = da->id->name;
   	  appAtts[attIndex++] = da->value;
   	}
---- 1539,1552 ----
+--- 1580,1593 ----
   	      return XML_ERROR_NO_MEMORY;
   	  }
             else {
@@ -147,7 +128,7 @@
   	  appAtts[attIndex++] = da->value;
   	}
 ***************
-*** 1531,1537 ****
+*** 1569,1575 ****
     i = 0;
     if (nPrefixes) {
       for (; i < attIndex; i += 2) {
@@ -155,7 +136,7 @@
           ATTRIBUTE_ID *id;
           ((XML_Char *)(appAtts[i]))[-1] = 0;
   	id = (ATTRIBUTE_ID *)lookup(&dtd.attributeIds, appAtts[i], 0);
---- 1557,1563 ----
+--- 1598,1604 ----
     i = 0;
     if (nPrefixes) {
       for (; i < attIndex; i += 2) {
@@ -164,7 +145,7 @@
           ((XML_Char *)(appAtts[i]))[-1] = 0;
   	id = (ATTRIBUTE_ID *)lookup(&dtd.attributeIds, appAtts[i], 0);
 ***************
-*** 1559,1568 ****
+*** 1597,1606 ****
   	((XML_Char *)(appAtts[i]))[-1] = 0;
       }
     }
@@ -175,7 +156,7 @@
     for (binding = *bindingsPtr; binding; binding = binding->nextTagBinding)
       binding->attId->name[-1] = 0;
     if (elementType->prefix) {
---- 1585,1595 ----
+--- 1626,1636 ----
   	((XML_Char *)(appAtts[i]))[-1] = 0;
       }
     }
@@ -187,95 +168,11 @@
     for (binding = *bindingsPtr; binding; binding = binding->nextTagBinding)
       binding->attId->name[-1] = 0;
     if (elementType->prefix) {
+*** expat/xmlparse/xmlparse.h.orig	Sun Mar  7 10:33:26 1999
+--- expat/xmlparse/xmlparse.h	Sat Mar 13 14:05:28 1999
 ***************
-*** 1695,1701 ****
-        return XML_ERROR_NONE;
-      case XML_TOK_DATA_NEWLINE:
-        if (characterDataHandler) {
-! 	XML_Char c = XML_T('\n');
-  	characterDataHandler(handlerArg, &c, 1);
-        }
-        else if (defaultHandler)
---- 1722,1728 ----
-        return XML_ERROR_NONE;
-      case XML_TOK_DATA_NEWLINE:
-        if (characterDataHandler) {
-! 	XML_Char c = XML_T(LF);
-  	characterDataHandler(handlerArg, &c, 1);
-        }
-        else if (defaultHandler)
-***************
-*** 2421,2427 ****
-      case XML_TOK_DATA_NEWLINE:
-        if (pool->end == pool->ptr && !poolGrow(pool))
-  	return XML_ERROR_NO_MEMORY;
-!       *(pool->ptr)++ = XML_T('\n');
-        break;
-      case XML_TOK_CHAR_REF:
-        {
---- 2448,2454 ----
-      case XML_TOK_DATA_NEWLINE:
-        if (pool->end == pool->ptr && !poolGrow(pool))
-  	return XML_ERROR_NO_MEMORY;
-!       *(pool->ptr)++ = XML_T(LF);
-        break;
-      case XML_TOK_CHAR_REF:
-        {
-***************
-*** 2465,2478 ****
-    for (;; s++) {
-      if (*s == XML_T('\0'))
-        return;
-!     if (*s == XML_T('\r'))
-        break;
-    }
-    p = s;
-    do {
-!     if (*s == XML_T('\r')) {
-!       *p++ = XML_T('\n');
-!       if (*++s == XML_T('\n'))
-          s++;
-      }
-      else
---- 2492,2505 ----
-    for (;; s++) {
-      if (*s == XML_T('\0'))
-        return;
-!     if (*s == XML_T(CR))
-        break;
-    }
-    p = s;
-    do {
-!     if (*s == XML_T(CR)) {
-!       *p++ = XML_T(LF);
-!       if (*++s == XML_T(LF))
-          s++;
-      }
-      else
-***************
-*** 2800,2807 ****
-    for (s = publicId; *s; s++) {
-      switch (*s) {
-      case XML_T(' '):
-!     case XML_T('\r'):
-!     case XML_T('\n'):
-        if (p != publicId && p[-1] != XML_T(' '))
-  	*p++ = XML_T(' ');
-        break;
---- 2827,2834 ----
-    for (s = publicId; *s; s++) {
-      switch (*s) {
-      case XML_T(' '):
-!     case XML_T(CR):
-!     case XML_T(LF):
-        if (p != publicId && p[-1] != XML_T(' '))
-  	*p++ = XML_T(' ');
-        break;
-*** expat/xmlparse/xmlparse.h.orig	Mon Jan  4 08:22:26 1999
---- expat/xmlparse/xmlparse.h	Sat Feb 20 18:32:31 1999
-***************
-*** 410,415 ****
---- 410,416 ----
+*** 428,433 ****
+--- 428,434 ----
   int XMLPARSEAPI XML_GetCurrentLineNumber(XML_Parser parser);
   int XMLPARSEAPI XML_GetCurrentColumnNumber(XML_Parser parser);
   long XMLPARSEAPI XML_GetCurrentByteIndex(XML_Parser parser);

@@ -1,5 +1,22 @@
 Revision history for Perl extension XML::Parser.
 
+2.21 Sun Mar 21 17:42:04 EST 1999
+	- Warren Vik <wvik@whitebarn.com> provided patches for a bug
+	  introduced with the is_defaulted method. It manifested itself
+	  by bogusly reporting duplicate attributes.
+	- Now using latest expat from ftp://ftp.jclark.com/pub/test/expat.zip,
+	  Version 19990307. (Plus any patches in Expat/expat.patches.)
+	- As suggested by Tim Bray, added an xml_escape method to
+	  Expat.
+	- Murray Nesbitt <murray@activestate.com> had build problems
+	  on Win32 that were solved by swapping 2 include files in
+	  Expat.xs
+	- Added following Expat namespace methods:
+		new_ns_prefixes
+		expand_ns_prefix
+		current_ns_prefixes
+	- Fixed memory handling in recognized_string method to get rid
+	  of "Attempt to free unreferenced scalar" bug.
 2.20 Sun Feb 28 15:35:52 EST 1999
 	- Fixed miscellaneous bugs in xmlfilter.
 	- In the default external entity handler, prepend the base only

@@ -1,8 +1,8 @@
 #!/usr/local/bin/perl -w
 #
-# $Revision: 1.10 $
+# $Revision: 1.11 $
 #
-# $Date: 1999/02/28 20:38:04 $
+# $Date: 1999/03/21 22:46:16 $
 
 use XML::Parser;
 
@@ -238,11 +238,7 @@ sub start_handler
 	    my $id = shift;
 	    my $val = shift;
 
-	    # Replace special characters
-	    $val =~ s/&/\&amp;/g;
-	    $val =~ s/</\&lt;/g;
-	    $val =~ s/>/\&gt;/g;
-	    $val =~ s/'/\&apos;/g;
+	    $val = $xp->xml_escape($val, "'");
 	    print " $id='$val'";
 	}
 	print ">";
@@ -285,11 +281,8 @@ sub char_handler
 
     if (length($text)) {
 
-      unless ($in_cdata) {
-	$text =~ s/&/\&amp;/g;
-	$text =~ s/</\&lt;/g;
-	$text =~ s/>/\&gt;/g;
-      }
+      $text = $xp->xml_escape($text)
+	unless $in_cdata;
 
       print $text;
     }

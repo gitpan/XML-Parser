@@ -21,7 +21,9 @@ Expat/expat/sample/elements.c
 Expat/expat/xmlparse/hashtable.c
 Expat/expat/xmlparse/hashtable.h
 Expat/expat/xmlparse/xmlparse.c
+Expat/expat/xmlparse/xmlparse.c.orig
 Expat/expat/xmlparse/xmlparse.h
+Expat/expat/xmlparse/xmlparse.h.orig
 Expat/expat/xmltok/asciitab.h
 Expat/expat/xmltok/dllmain.c
 Expat/expat/xmltok/iasciitab.h
