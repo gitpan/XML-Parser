@@ -64,7 +64,8 @@ typedef enum {
   PS_Elementname, PS_Attelname, PS_Entityval, PS_Entsysid, PS_Entpubid,
   PS_Declend, PS_Entndata, PS_Entnotation, PS_Elcontent, PS_Attdef,
   PS_Atttype, PS_Attmoretype, PS_Attval,
-  PS_Externaldecl, PS_Conditional, PS_Condopen, PS_Ignore
+  PS_Externaldecl, PS_Conditional, PS_Condopen, PS_Ignore,
+  PS_ContinueEntityval, PS_ContinueAttval
 } ParseState;
 
 /* Values for which_decl */
@@ -157,6 +158,8 @@ typedef struct {
 
   int atttyp_offset;
   int atttyp_len;
+
+  int attdef_offset;
 
   /* Callback handlers */
 
@@ -700,6 +703,10 @@ parse_decl(CallbackVector *cbv, const char *str, int len)
 	goto doctype_end;
       }
     }
+    else if (cbv->parseparam) {
+      cbv->dtdparse_state = PS_Externaldecl;
+      goto parse_external;
+    }
     break;
 
   case PS_Internaldecl:
@@ -731,6 +738,7 @@ parse_decl(CallbackVector *cbv, const char *str, int len)
     break;
 
   case PS_Externaldecl:
+  parse_external:
     if (brkstrt) {
       if (len > 1 && strnEQ(str, "<?", 2))
 	return 0;
@@ -811,10 +819,30 @@ parse_decl(CallbackVector *cbv, const char *str, int len)
       }
     }
     else if (len >= 2 ) {
+      if (cbv->doctype_buffer[cbv->dtb_len - len]
+	  == cbv->doctype_buffer[cbv->dtb_len - 1]) {
+	cbv->dtdparse_state = PS_Declend;
+	if (dflags & INST_ENT) {
+	  cbv->entval_offset = cbv->dtb_len - len + 1;	/* Account for '' */
+	  cbv->entval_len = len - 2;			/* Account for '' */
+	  cbv->which_decl = DECL_INTENT;
+	}
+      }
+      else {
+	/* We've gotten a partial token */
+	cbv->dtdparse_state = PS_ContinueEntityval;
+	cbv->entval_offset = cbv->dtb_len - len;  /* Strip off quote later */
+      }
+    }
+    break;
+
+  case PS_ContinueEntityval:
+    if (cbv->doctype_buffer[cbv->dtb_len - 1]
+	== cbv->doctype_buffer[cbv->entval_offset]) {
       cbv->dtdparse_state = PS_Declend;
       if (dflags & INST_ENT) {
-	cbv->entval_offset = cbv->dtb_len - len + 1;	/* Account for '' */
-	cbv->entval_len = len - 2;			/* Account for '' */
+	cbv->entval_len = cbv->dtb_len - cbv->entval_offset - 2;
+	cbv->entval_offset++;
 	cbv->which_decl = DECL_INTENT;
       }
     }
@@ -928,6 +956,22 @@ parse_decl(CallbackVector *cbv, const char *str, int len)
       cbv->attfixed = 1;
     }
     else {
+      cbv->attdef_offset = cbv->dtb_len - len;
+      if (cbv->doctype_buffer[cbv->attdef_offset] == '#'
+	  || (cbv->doctype_buffer[cbv->dtb_len - 1]
+	      == cbv->doctype_buffer[cbv->attdef_offset]))
+	goto got_attdef_val;
+      else {
+	/* We've got a partial token */
+	cbv->dtdparse_state = PS_ContinueAttval;
+      }
+    }
+    break;
+
+  case PS_ContinueAttval:
+    if (cbv->doctype_buffer[cbv->dtb_len - 1]
+	== cbv->doctype_buffer[cbv->attdef_offset]) {
+    got_attdef_val:
       cbv->dtdparse_state = PS_Attdef;
       if (dflags & INST_ATT) {
 	dSP;
@@ -935,7 +979,8 @@ parse_decl(CallbackVector *cbv, const char *str, int len)
 	char *attname = &(cbv->doctype_buffer[cbv->attnam_offset]);
 	char *type    = &(cbv->doctype_buffer[cbv->atttyp_offset]);
 	/* quotes kept on */
-	char *dflt    = &(cbv->doctype_buffer[cbv->dtb_len - len]);
+	char *dflt    = &(cbv->doctype_buffer[cbv->attdef_offset]);
+	int  dflt_len = cbv->dtb_len - cbv->attdef_offset;
 
 	cbv->in_local_hndlr = 1;
 
@@ -944,7 +989,7 @@ parse_decl(CallbackVector *cbv, const char *str, int len)
 	XPUSHs(sv_2mortal(mynewSVpv(elname, cbv->elnam_len)));
 	XPUSHs(sv_2mortal(mynewSVpv(attname, cbv->attnam_len)));
 	XPUSHs(sv_2mortal(mynewSVpv(type, cbv->atttyp_len)));
-	XPUSHs(sv_2mortal(mynewSVpv(dflt, len)));
+	XPUSHs(sv_2mortal(mynewSVpv(dflt, dflt_len)));
 	if (cbv->attfixed)
 	  XPUSHs(&PL_sv_yes);
 	PUTBACK;
@@ -954,7 +999,6 @@ parse_decl(CallbackVector *cbv, const char *str, int len)
       }
     }
     break;
-
   }  /* End of switch(cbv->dtdparse_state) */
 
   return 1;
@@ -1050,13 +1094,16 @@ declaration_end:
     else if (cbv->which_decl == DECL_ATTLST) {
       if (dflags & INST_ATT) {
 	/* Attlist declarations taken care of, 1 attribute at a time, under
-	   the PS_Attval case in the switch above */
+	   the PS_ContinueAttval case in the switch above */
 
 	called_handler = 1;
       }
     }
 
   }
+
+  if (called_handler)
+    cbv->which_decl = 0;
 
   if (! called_handler && !(dflags & INST_DOC) && (dflags & INST_DFL)) {
     dSP;

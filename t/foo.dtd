@@ -1,6 +1,11 @@
 <?xml encoding="x-sjis-unicode"?>
 <!ENTITY joy "™D">
 
+<!ATTLIST foo zz CDATA 'here'>
+
+<!ENTITY % bar 'IGNORE'>
+<!ENTITY % foo 'IGNORE'>
+
 <![%bar;[
 <!ATTLIST bar xyz (a|b|c) 'b'>
 ]]>

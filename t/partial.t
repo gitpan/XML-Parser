@@ -6,7 +6,11 @@ print "ok 1\n";
 
 my $cnt = 0;
 
-my $p = new XML::Parser(Handlers => {Comment => sub {$cnt++;}});
+sub docnt {
+  $cnt++;
+}
+
+my $p = new XML::Parser(Handlers => {Comment => \&docnt});
 
 my $xpnb = $p->parse_start;
 

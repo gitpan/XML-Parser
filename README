@@ -1,4 +1,4 @@
-			XML::Parser Version 2.25
+			XML::Parser Version 2.26
 
 Copyright (c) 1998 Larry Wall and Clark Cooper.
 All rights reserved.
@@ -48,25 +48,15 @@ install by typing:
 
 	make install
 
-Differences from Version 2.24
+Differences from Version 2.25
 =============================
 
-Fixed a memory bug in Expat.xs that was causing a SEGV on the cdata.t
-test (among other things).
+Fixed a bug in the DTD parser that prevented the external DTD from generating
+calls to declaration handlers when there was no internal subset.
 
-There are now two default external entity handlers: file_ext_ent_handler
-and lwp_ext_ent_handler. The first handles just files (and file URIs). It's
-the same old handler that's been there for many versions of this package.
-The second handler will deal with general URIs.
-
-If the LWP package is installed, then lwp_ext_ent_handler is registered to
-handle external entity references, otherwise file_ext_ent_handler is
-registered.
-
-Both of these handlers will choke on huge external entities, since they
-read the entire entity before passing it on to the parser.
-
-You still have the option of setting your own handler.
+Fixed another bug in the DTD parser where it was mistakenly assuming that
+entity values and attribute default values were coming to the default handler
+with a single call.
 
 Clark Cooper
   coopercc@netheaven.com

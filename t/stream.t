@@ -10,6 +10,10 @@ my $tmpfile = 'stream.tmp';
 
 my $cnt = 0;
 
+sub docnt {
+  $cnt++;
+}
+
 open(OUT, ">$tmpfile") or die "Couldn't open $tmpfile for output";
 open(IN, $file) or die "Couldn't open $file for input";
 
@@ -29,7 +33,7 @@ close(IN);
 close(OUT);
 
 my $parser = new XML::Parser(Stream_Delimiter => $delim,
-			     Handlers => {Comment => sub {$cnt++;}});
+			     Handlers => {Comment => \&docnt});
 
 open(FOO, $tmpfile);
 

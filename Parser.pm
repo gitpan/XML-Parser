@@ -13,11 +13,12 @@ use Carp;
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.25';
+  $VERSION = '2.26';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
   eval {
     require 'LWP.pm';
+    require 'URI::URL.pm';
   };
   $have_LWP = not $@;
   if ($have_LWP) {
@@ -277,7 +278,7 @@ sub file_ext_ent_handler {
 sub lwp_ext_ent_handler {
   my ($exp, $base, $sys) = @_;  # We don't use public id
 
-  my $uri = new URI($sys);
+  my $uri = new URI::URL($sys);
   if (not $uri->scheme and $base) {
     $uri = $uri->abs($base);
   }
@@ -287,7 +288,7 @@ sub lwp_ext_ent_handler {
     return file_ext_ent_handler($exp, $base, $sys);
   }
 
-  my $ua = ($exp->{_lwpagent} ||= LWP::UserAgent->new);
+  my $ua = ($exp->{_lwpagent} ||= new LWP::UserAgent());
 
   my $req = new HTTP::Request('GET', $uri);
 

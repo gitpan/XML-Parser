@@ -6,8 +6,12 @@ print "ok 1\n";
 
 my $count = 0;
 
+sub docnt {
+  $count++;
+}
+
 $parser = new XML::Parser(ErrorContext => 2);
-$parser->setHandlers(Comment => sub { $count++;});
+$parser->setHandlers(Comment => \&docnt);
 
 $parser->parsefile('samples/REC-xml-19980210.xml');
 

@@ -1,11 +1,30 @@
-BEGIN {print "1..17\n";}
+BEGIN {print "1..19\n";}
 END {print "not ok 1\n" unless $loaded;}
 use XML::Parser;
 $loaded = 1;
 print "ok 1\n";
 
-my $docstr =<<'End_of_Doc;';
-<?xml version="1.0" encoding="US-ASCII" ?>
+my $bigval =<<'End_of_bigval;';
+This is a large string value to test whether the declaration parser still
+works when the entity or attribute default value may be broken into multiple
+calls to the default handler.
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+End_of_bigval;
+
+my $docstr =<<"End_of_Doc;";
+<?xml version="1.0" encoding="ISO-8859-1" ?>
 <!DOCTYPE foo SYSTEM 't/foo.dtd'
   [
    <!ENTITY alpha 'a'>
@@ -15,11 +34,13 @@ my $docstr =<<'End_of_Doc;';
          version CDATA #FIXED '1.0'
          color (red|green|blue) 'green'>
    <!ENTITY skunk "stinky animal">
+   <!ENTITY big "$bigval">
    <!-- a comment -->
    <!NOTATION gif SYSTEM 'http://www.somebody.com/specs/GIF31.TXT'>
    <!ENTITY logo PUBLIC '//Widgets Corp/Logo' 'logo.gif' NDATA gif>
    <?DWIM a useless processing instruction ?>
    <!ELEMENT bar ANY>
+   <!ATTLIST bar big CDATA '$bigval'>
   ]>
 <foo/>
 End_of_Doc;
@@ -68,7 +89,8 @@ sub enth2 {
 
     $tests[8]++ if ($name eq 'alpha' and $val eq 'a');
     $tests[9]++ if ($name eq 'skunk' and $val eq 'stinky animal');
-    $tests[10]++ if ($name eq 'logo' and !defined($val) and
+    $tests[10]++ if ($name eq 'big' and $val eq $bigval);
+    $tests[11]++ if ($name eq 'logo' and !defined($val) and
 		    $sys eq 'logo.gif' and $pub eq '//Widgets Corp/Logo'
 		    and $notation eq 'gif');
 }
@@ -76,29 +98,31 @@ sub enth2 {
 sub doc {
     my ($p, $name, $sys, $pub, $intdecl) = @_;
 
-    $tests[11]++ if $name eq 'foo';
-    $tests[12]++ if $sys eq 't/foo.dtd';
-    $tests[13]++ if length($intdecl) == 439;
+    $tests[12]++ if $name eq 'foo';
+    $tests[13]++ if $sys eq 't/foo.dtd';
+    $tests[14]++ if length($intdecl) == 2958;
 }
 
 sub att {
     my ($p, $elname, $attname, $type, $default, $fixed) = @_;
 
-    $tests[14]++ if ($elname eq 'junk' and $attname eq 'id'
+    $tests[15]++ if ($elname eq 'junk' and $attname eq 'id'
 		     and $type eq 'ID' and $default eq '#REQUIRED'
 		     and not $fixed);
-    $tests[15]++ if ($elname eq 'junk' and $attname eq 'version'
+    $tests[16]++ if ($elname eq 'junk' and $attname eq 'version'
 		     and $type eq 'CDATA' and $default eq "'1.0'" and $fixed);
-    $tests[16]++ if ($elname eq 'junk' and $attname eq 'color'
+    $tests[17]++ if ($elname eq 'junk' and $attname eq 'color'
 		     and $type eq '(red|green|blue)'
 		     and $default eq "'green'");
+    $tests[18]++ if ($elname eq 'bar' and $attname eq 'big' and $default eq
+		     "'$bigval'");
 }
     
 sub xd {
     my ($p, $version, $enc, $stand) = @_;
 
-    if ($version eq '1.0' and $enc eq 'US-ASCII' and not defined($stand)) {
-	$tests[17]++;
+    if ($version eq '1.0' and $enc eq 'ISO-8859-1' and not defined($stand)) {
+	$tests[19]++;
     }
 }
 
@@ -111,7 +135,7 @@ $parser->setHandlers(Entity  => \&enth2,
 
 $parser->parse($docstr);
 
-for (2 .. 17) {
+for (2 .. 19) {
     print "not " unless $tests[$_];
     print "ok $_\n";
 }

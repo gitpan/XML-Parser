@@ -1,4 +1,4 @@
-BEGIN {print "1..6\n";}
+BEGIN {print "1..8\n";}
 END {print "not ok 1\n" unless $loaded;}
 use XML::Parser;
 $loaded = 1;
@@ -17,7 +17,6 @@ my $doc =<<'End_of_doc;';
 </foo>
 End_of_doc;
 
-
 my $gotinclude = 0;
 my $gotignore = 0;
 
@@ -29,10 +28,12 @@ sub start {
   if ($el eq 'foo') {
     print "not " if defined($atts{top});
     print "ok 2\n";
+    print "not " unless defined($atts{zz});
+    print "ok 3\n";
   }
   elsif ($el eq 'bar') {
     print "not " unless (defined $atts{xyz} and $atts{xyz} eq 'b');
-    print "ok 3\n";
+    print "ok 4\n";
   }
 }
 
@@ -60,10 +61,22 @@ $p = new XML::Parser(ParseParamEnt => 1,
 $p->parse($doc);
 
 print "not " unless $bartxt eq "\xe5\x83\x96, \xe5\x83\x96";
-print "ok 4\n";
-
-print "not " unless $gotinclude;
 print "ok 5\n";
 
-print "not " if $gotignore;
+print "not " unless $gotinclude;
 print "ok 6\n";
+
+print "not " if $gotignore;
+print "ok 7\n";
+
+$doc =~ s/[\s\n]+\[[^]]*\][\s\n]+//m;
+
+$p->setHandlers(Start => sub {
+		          my ($xp,$el,%atts) = @_;
+			  if ($el eq 'foo') {
+			    print "not " unless defined($atts{zz});
+			    print "ok 8\n";
+			  }
+			});
+
+$p->parse($doc);

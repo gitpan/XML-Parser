@@ -1,5 +1,14 @@
 Revision history for Perl extension XML::Parser.
 
+2.26 Sun Jul 25 19:06:41 EDT 1999
+	- Ken Beesley <ken.beesley@xrce.xerox.com> discovered that
+	  declarations in the external subset are not sent to registered
+	  handlers when there is no internal subset.
+	- Fixed parse_dtd to work when entity values or attribute defaults
+	  are so large that they might be broken across multiple calls to
+	  the default handler.
+	- For lwp_ext_ent_handler, use URI::URL instead of URI so that old
+	  5.004 installations will work with it.
 2.25 Fri Jul 23 06:23:43 EDT 1999
 	- Now using Version 1990709 of expat. No local patches.
 	- Numerous people reported a SEGV problem when running t/cdata
