@@ -1,3 +1,29 @@
+27 July 1999
+
+This is a PPC/CFM68K shared library for MacOS. Please refer to the original
+README (below) for an explanation of changes from previous versions. Be advised
+that both the 2.24 and 2.25 versions of XML-Parser were broken.
+
+Installation: unpack this distribution using Chris Nandor's 'untargzipme'
+utility, and then drop the folder on the 'installme' droplet.
+
+Alternatively, if you use Stuffit Expander, you will have to unbin the shared
+library as a separate step (located in folders
+:blib:lib:MacPPC:auto:XML:Parser:Expat and :blib:lib:MacCFM68K:auto:XML:Parser:Expat).
+
+If manually installing, copy the entire folder :blib:lib:XML into your 'site_perl'
+folder, and place the required shared library into folder
+:site_perl:MacPPC:auto:XML:Parser:Expat or :site_perl:MacCFM68K:auto:XML:Parser:Expat.
+
+Some of the tests in the t folder were slightly modified to work properly for
+MacOS. The UNIX originals are identified with the suffix .orig.
+
+For bug reports on *this build* please contact me, Arved Sandstrom, at
+
+Arved_37@chebucto.ns.ca
+
+*****
+
 			XML::Parser Version 2.26
 
 Copyright (c) 1998 Larry Wall and Clark Cooper.
