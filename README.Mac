@@ -1,0 +1,14 @@
+Monday, March 1, 1999
+
+1. The primary modification is to change the macro BUFSIZE in Expat.xs 
+from 32768 to 24576. This is to keep static data below 32K. Because 
+Expat.xs is 56K in size, I have not included 2 copies. The original line 
+is still in the file, commented out.
+
+2. The only other modifications are to 4 tests. Three of them are for 
+conversions of Unix filepaths to MacOS filepaths. The other, in 
+'external_ent.t', replaces '.' in a regular expression with [^\012]. The 
+latter will work on any OS; the former only works under Unix.
+
+Arved Sandstrom
+<Arved_37@chebucto.ns.ca>

@@ -27,7 +27,8 @@
 #define PL_na		na
 #endif
 
-#define BUFSIZE 32768
+/* #define BUFSIZE 32768 */
+#define BUFSIZE 24576
 
 #define NSDELIM  '|'
 
