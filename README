@@ -1,3 +1,46 @@
+Monday, March 22, 1999
+
+This is the XML::Parser module with shared libraries compiled for 
+MacPerl.  Shared libraries run only on PPC and CFM68K versions, not 
+non-CFM 68K versions.
+
+Installation.  It's best to install the files in ':blib:lib' into your 
+'site_perl' folder; that, after all, is what it is meant for -
+
+    {MACPERL}site_perl:XML:Parser.pm
+    {MACPERL}site_perl:XML:Parser:Expat.pm
+    {MACPERL}site_perl:XML:Parser:Encodings:*.enc
+    {MACPERL}site_perl:MacCFM68K:auto:XML:Parser:Expat:Expat
+    {MACPERL}site_perl:MacPPC:auto:XML:Parser:Expat:Expat
+
+Also read the original README file for this distribution, included below.
+
+For technical notes, please see 'README.Mac'.  Files which are referenced 
+in that document as having been affected by this port are in folder 
+'Original_t'.  This includes _original_ 't' test files.  These files are 
+only for reference.
+
+Testing.  The 't' files have been tested using both the MacPerl application 
+and the MPW perl tool.  When testing before installation, use the -I switch 
+(perl tool in MPW) or Edit>Preferences (MacPerl app) to add ':blib:lib' to 
+your path, and make sure it precedes all others.
+
+Examples.  Bear in mind that returned XML, by specification, is studded 
+with linefeeds (character \012 octal or \xA hex).  For this reason, of the 
+three example scripts in folder 'samples', I recommend using 'xmlcomments' 
+with a grain of salt, and 'xmlfilter' maybe not at all.  :-) 'xmlstats' 
+works just fine.
+
+Here's an MPW command line to test 'xmlstats' before installing the files:
+
+perl -I ':blib:lib' :samples:xmlstats :samples:REC-xml-19980210.xml
+
+*****
+
+Arved Sandstrom          mailto:Arved_37@chebucto.ns.ca
+
+*****
+
 			XML::Parser Version 2.21
 
 Copyright (c) 1998 Larry Wall and Clark Cooper.
