@@ -27,7 +27,7 @@ $bigval =~ s/\n/ /g;
 
 my $docstr =<<"End_of_Doc;";
 <?xml version="1.0" encoding="ISO-8859-1" ?>
-<!DOCTYPE foo SYSTEM 'foo.dtd'
+<!DOCTYPE foo SYSTEM 't/foo.dtd'
   [
    <!ENTITY alpha 'a'>
    <!ELEMENT junk ((bar|foo|xyz+), zebra*)>
@@ -116,7 +116,7 @@ sub doc {
     my ($p, $name, $sys, $pub, $intdecl) = @_;
 
     $tests[21]++ if $name eq 'foo';
-    $tests[22]++ if $sys eq 'foo.dtd';
+    $tests[22]++ if $sys eq 't/foo.dtd';
     $tests[23]++ if $intdecl
 }
 

@@ -6,9 +6,9 @@
 # This program is free software; you can redistribute it and/or
 # modify it under the same terms as Perl itself.
 #
-# $Revision: 1.3 $
+# $Revision: 1.1.1.1 $
 #
-# $Date: 2000/05/22 04:00:32 $
+# $Date: 2003/07/27 11:07:11 $
 #
 #	This program take an XML document (either on standard input or
 #	from a filename supplied as an argument) and generates corresponding
