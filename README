@@ -1,3 +1,35 @@
+Thursday, January 21, 1999
+
+This is the XML::Parser module with shared libraries compiled for 
+MacPerl.  Shared libraries run only on PPC and CFM68K versions, not 
+non-CFM 68K versions.
+
+Decompress macblib.sit.hqx and install the files in "macblib:lib".
+Installing into your site_perl directory is best, as opposed to mucking up 
+{MACPERL}lib -
+
+    {MACPERL}site_perl:XML:Parser.pm
+    {MACPERL}site_perl:XML:Parser:Expat.pm
+    {MACPERL}site_perl:XML:Parser:Encodings:*.enc
+    {MACPERL}site_perl:MacCFM68K:auto:XML:Parser:Expat:Expat
+    {MACPERL}site_perl:MacPPC:auto:XML:Parser:Expat:Expat
+
+Also read the original README file for this distribution, included below.
+
+For technical notes, please see 'README.Mac'. Files which are referenced in 
+that document as having been affected by this port are in folder 
+'Mac_Changes'. This includes _modified_ Perl source and _unmodified_ 't' 
+test files. These files are only for reference.
+
+Many thanks to Chris Nandor, for efforts above and beyond, in helping me 
+prepare a MacCPAN standard distribution.
+
+--
+
+Arved Sandstrom          mailto:Arved_37@chebucto.ns.ca
+
+*****
+
 			XML::Parser Version 2.19
 
 Copyright (c) 1998 Larry Wall and Clark Cooper.
