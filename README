@@ -1,17 +1,25 @@
-Friday, June 29, 2001
+Tuesday, Nov. 27, 2001
 
 Dear MacPerl Users,
 
-this is the XML-Parser-2.30 module with shared libraries compiled for MacPerl. Shared 
-libraries run only on PPC and CFM68K versions of MacPerl, not non-CFM 68K versions.
+this is the XML-Parser-2.30 module with a shared library compiled for MacPerl 5.6.1 
+(and higher). This was compiled with MPW's MrC (PPC). Passed all tests with the MrC
+build of the MacPerl 5.6.1 MPW tool (after a static build, though) and application. 
+Let me know of any problems you might encounter.
 
-This was compiled with MPW's MrC (PPC) and SC (68K). Passed all tests on both
-architectures (thanks to my old Mac LC :). However, let me know of any problems you
-might encounter.
 
-You can download the module and the readme from my website via
+*** NOTE:
+This bundle contains shared libraries, which are loaded dynamically by MacPerl -- 
+well, normally. Currently, dynamic loading of shared libs might NOT work with the MPW 
+MacPerl tool. However, dynamic loading reliable works with the MacPerl application.
+Note also that dynamic loading is NOT supported by the 68K versions of the MacPerl 
+application and tool. And finally, note that this distribution will NOT work with 
+good old MacPerl 5.2.0r4.
 
-    http://usemacperl.webjump.com/modules.html
+
+You can download the XML-Parser-2.30-bin56Mac.tar.gz tarball from my website at
+
+    http://usemacperl.esmartweb.com/modules.html
 
 or from my CPAN directory
 
@@ -26,55 +34,15 @@ drop the packed archive or the unpacked folder on the droplet. Answer the
 upcoming question "Convert all text and MacBinary files?" with "Yes". This should 
 install the module properly. 
 
-The installer is part of the cpan-mac module, available from CPAN 
-
-    http://www.perl.com/CPAN-local/authors/id/CNANDOR/
-
-or via Chris Nandor's MacPerl page 
-
-    http://pudge.net/macperl/ .
+Since MacPerl 5.6.1 beta 1, the installer is part of the MacPerl disribution.
 	
-
-CHANGES
-=======
-All changed files were saved with a '.orig' ending. Use the diff tool for MPW 
-to see the changes [1].
-
-I've added two MPW worksheets (PPC and 68K) to the distribution. This way you can
-build the module yourself, if you like. It's best to open the worksheet and execute 
-the commands step by step. Read and follow the instructions I've provided for each 
-step of the build process. However, you will need the MacPerl source distribution [2] 
-and the FREE MPW development environment, available from Apple [3]. You may also want 
-to take a look at the Macintosh Perl XS Tutorial [4]. In addition, there's also a new 
-text only version of this tutorial available, that comes without tools and samples. [5] 
-
-In the build process for CFM68K some extra preparation is required for the source 
-file(s). To help you in this procedure, I've added the file 'Expat_68K.xs'. This 
-should be the input file for the XSUBpp compiler in the CFM68K build process.
-
-In that 68K XS file, the header declarations are bracketed with #import pragmas.
-This special pragma treatment is needed for the SC compiler and the ILink linker  
-(see the Macintosh Perl XS tutorial for details). Follow the steps in the 68K MPW
-worksheet and everything should be fine.
-
-As of XML::Parser 2.30, expat is no longer part of the CPAN distribution. For your 
-convenience, I decided to bundle the ported expat 1.95.1 library with the XML::Parser 
-for Mac OS distribution. See the README.Mac in the :Expat:expat-1.95.1: folder for 
-details.
 
 Have fun.
 
 --
 Thomas Wegner
 
-toms_email@gmx.de
-
-References:
-[1] diff MPW tool  <ftp://sunsite.cnlab-switch.ch/software/platform/macos/src/mpw_c/DiffUtils_261.sit.bin>
-[2] MacPerl 5.004 source  <ftp://sunsite.cnlab-switch.ch/software/platform/macos/perl/Mac_Perl_520r4_src.bin>
-[3] Apple's MPW  <http://developer.apple.com/tools/mpw-tools/>
-[4] Macintosh Perl XS Tutorial  <http://macperl.com/depts/Tutorials/XS/Mac_XS.sea.hqx>
-[5] Macintosh Perl XS Tutorial version 1.1 (text only)  <http://usemacperl.webjump.com/modules.html>
+<wegner_thomas@yahoo.com>
 
 
 

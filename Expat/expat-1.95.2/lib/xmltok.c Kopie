@@ -3,17 +3,10 @@ Copyright (c) 1998, 1999 Thai Open Source Software Center Ltd
 See the file COPYING for copying permission.
 */
 
-static char RCSId[]
-  = "$Header: /cvsroot/expat/expat/lib/xmltok.c,v 1.5 2000/10/22 19:20:23 coopercc Exp $";
-
 #ifdef COMPILED_FROM_DSP
 #  include "winconfig.h"
 #else
-#  ifdef __MacOS_Classic__
-#    include <macconfig.h>
-#  else
-#    include <config.h>
-#  endif
+#  include <config.h>
 #endif /* ndef COMPILED_FROM_DSP */
 
 #include "xmltok.h"
@@ -1504,6 +1497,7 @@ int initScan(const ENCODING **encodingTable,
       if (ptr + 2 == end)
 	return XML_TOK_PARTIAL;
       if ((unsigned char)ptr[2] == 0xBF) {
+	*nextTokPtr = ptr + 3;
 	*encPtr = encodingTable[UTF_8_ENC];
 	return XML_TOK_BOM;
       }

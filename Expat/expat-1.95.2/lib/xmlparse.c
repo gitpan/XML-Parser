@@ -3,19 +3,23 @@ Copyright (c) 1998, 1999, 2000 Thai Open Source Software Center Ltd
 See the file COPYING for copying permission.
 */
 
-static char RCSId[]
-  = "$Header: /cvsroot/expat/expat/lib/xmlparse.c,v 1.11 2000/10/22 19:20:23 coopercc Exp $";
-
 #ifdef COMPILED_FROM_DSP
 #  include "winconfig.h"
-#  define XMLPARSEAPI __declspec(dllexport)
+#  define XMLPARSEAPI(type) __declspec(dllexport) type __cdecl
 #  include "expat.h"
 #  undef XMLPARSEAPI
 #else
-#include <config.h>
+#  ifdef MACOS_TRADITIONAL
+#    ifdef __SC_Compiler__
+#      include <string.h>
+#    endif
+#    include <macconfig.h>
+#  else
+#    include <config.h>
+#  endif
 
 #ifdef __declspec
-#  define XMLPARSEAPI __declspec(dllexport)
+#  define XMLPARSEAPI(type) __declspec(dllexport) type __cdecl
 #endif
 
 #include "expat.h"
@@ -26,6 +30,7 @@ static char RCSId[]
 #endif /* ndef COMPILED_FROM_DSP */
 
 #include <stddef.h>
+#include <string.h>
 
 #ifdef XML_UNICODE
 #define XML_ENCODE_MAX XML_UTF16_ENCODE_MAX
@@ -453,6 +458,7 @@ typedef struct {
 #define notStandaloneHandler (((Parser *)parser)->m_notStandaloneHandler)
 #define externalEntityRefHandler (((Parser *)parser)->m_externalEntityRefHandler)
 #define externalEntityRefHandlerArg (((Parser *)parser)->m_externalEntityRefHandlerArg)
+#define internalEntityRefHandler (((Parser *)parser)->m_internalEntityRefHandler)
 #define unknownEncodingHandler (((Parser *)parser)->m_unknownEncodingHandler)
 #define elementDeclHandler (((Parser *)parser)->m_elementDeclHandler)
 #define attlistDeclHandler (((Parser *)parser)->m_attlistDeclHandler)
@@ -1324,8 +1330,19 @@ const XML_LChar *XML_ErrorString(int code)
 }
 
 const XML_LChar *
-XML_ExpatVersion() {
+XML_ExpatVersion(void) {
   return VERSION;
+}
+
+XML_Expat_Version
+XML_ExpatVersionInfo(void) {
+  XML_Expat_Version version;
+
+  version.major = XML_MAJOR_VERSION;
+  version.minor = XML_MINOR_VERSION;
+  version.micro = XML_MICRO_VERSION;
+
+  return version;
 }
 
 static
@@ -2742,7 +2759,7 @@ doProlog(XML_Parser parser,
 	return XML_ERROR_NO_MEMORY;
       if (attlistDeclHandler && declAttributeType) {
 	if (*declAttributeType == '('
-	    || *declAttributeType == 'N' && declAttributeType[1] == 'O') {
+	    || (*declAttributeType == 'N' && declAttributeType[1] == 'O')) {
 	  /* Enumerated or Notation type */
 	  if (! poolAppendChar(&tempPool, ')')
 	      || ! poolAppendChar(&tempPool, '\0'))
@@ -2776,7 +2793,7 @@ doProlog(XML_Parser parser,
 	  return XML_ERROR_NO_MEMORY;
 	if (attlistDeclHandler && declAttributeType) {
 	  if (*declAttributeType == '('
-	      || *declAttributeType == 'N' && declAttributeType[1] == 'O') {
+	      || (*declAttributeType == 'N' && declAttributeType[1] == 'O')) {
 	    /* Enumerated or Notation type */
 	    if (! poolAppendChar(&tempPool, ')')
 		|| ! poolAppendChar(&tempPool, '\0'))

@@ -9,13 +9,13 @@ static char RCSId[]
 #ifdef COMPILED_FROM_DSP
 #  include "winconfig.h"
 #else
-#  ifdef __MacOS_Classic__
+#  ifdef MACOS_TRADITIONAL
 #    include <macconfig.h>
 #  else
 #    include <config.h>
 #  endif
 #endif /* ndef COMPILED_FROM_DSP */
-
+ 
 #include "xmlrole.h"
 #include "ascii.h"
 

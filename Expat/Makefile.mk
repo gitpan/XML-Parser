@@ -21,19 +21,30 @@ NAME_SYM = XML_Parser_Expat
 VERSION = 2.30
 VERSION_SYM = 2_30
 XS_VERSION = 2.30
-INST_LIB = MacintoshHD:MacPerl Ä:site_perl
-INST_ARCHLIB = MacintoshHD:MacPerl Ä:site_perl
-PERL_LIB = MacintoshHD:MacPerl Ä:site_perl
-PERL = miniperl
-FULLPERL = perl
+INST_LIB = ::::lib
+INST_ARCHLIB = ::::lib
+PERL_LIB = ::::lib
+PERL_SRC = ::::
+MACPERL_SRC = ::::macos:
+MACPERL_LIB = ::::macos:lib
+PERL = ::::miniperl
+FULLPERL = ::::perl
 XSPROTOARG = -noprototypes
 SOURCE =  Expat.c
 
 MODULES = Expat.pm
 
 
-.INCLUDE : $(PERL_SRC)BuildRules.mk
+.INCLUDE : $(MACPERL_SRC)BuildRules.mk
 
+
+VERSION_MACRO = VERSION
+DEFINE_VERSION = -d $(VERSION_MACRO)="¶"$(VERSION)¶""
+XS_VERSION_MACRO = XS_VERSION
+XS_DEFINE_VERSION = -d $(XS_VERSION_MACRO)="¶"$(XS_VERSION)¶""
+
+MAKEMAKER = MacintoshHD:macperl_src:perl:macos::lib:ExtUtils:MakeMaker.pm
+MM_VERSION = 5.45
 
 # FULLEXT = Pathname for extension directory (eg DBD:Oracle).
 # BASEEXT = Basename part of FULLEXT. May be just equal FULLEXT.
@@ -42,15 +53,28 @@ MODULES = Expat.pm
 FULLEXT = XML:Parser:Expat
 BASEEXT = Expat
 ROOTEXT = XML:Parser:
+DEFINE =  $(XS_DEFINE_VERSION) $(DEFINE_VERSION)
+INC = -i :expat-1.95.2:lib:
 
 # Handy lists of source code files:
-XS_FILES= Expat.xs \
-	Expat_68K.xs
+XS_FILES= Expat.xs
 C_FILES = Expat.c
-H_FILES = encoding.h
+H_FILES = ascii.h \
+	asciitab.h \
+	encoding.h \
+	expat.h \
+	iasciitab.h \
+	latin1tab.h \
+	macconfig.h \
+	nametab.h \
+	utf8tab.h \
+	winconfig.h \
+	xmlrole.h \
+	xmltok.h \
+	xmltok_impl.h
 
 
-.INCLUDE : $(PERL_SRC)ext:ExtBuildRules.mk
+.INCLUDE : $(MACPERL_SRC)ExtBuildRules.mk
 
 
 # --- MakeMaker dist section skipped.
@@ -82,13 +106,22 @@ install :: do_install_static
 install_static :: do_install_static
 
 
+# --- MakeMaker htmlifypods section:
+
+htmlifypods : pure_all
+	$(NOOP)
+
+
+# --- MakeMaker processPL section:
+
+
 # --- MakeMaker clean section:
 
 # Delete temporary files but do not touch installed files. We don't delete
 # the Makefile here so a later make realclean still has a makefile to use.
 
 clean ::
-	$(RM_RF) Expat_68K.c Expat.c
+	$(RM_RF) Expat.c
 	$(MV) Makefile.mk Makefile.mk.old
 
 
@@ -111,16 +144,25 @@ realclean purge ::  clean
 
 # --- MakeMaker install section skipped.
 
+# --- MakeMaker ppd section:
+# Creates a PPD (Perl Package Description) for a binary distribution.
+ppd:
+	@$(PERL) -e "print qq{<SOFTPKG NAME=\"XML-Parser-Expat\" VERSION=\"2,30,0,0\">\n}. qq{\t<TITLE>XML-Parser-Expat</TITLE>\n}. qq{\t<ABSTRACT></ABSTRACT>\n}. qq{\t<AUTHOR></AUTHOR>\n}. qq{\t<IMPLEMENTATION>\n}. qq{\t\t<OS NAME=\"$(OSNAME)\" />\n}. qq{\t\t<ARCHITECTURE NAME=\"\" />\n}. qq{\t\t<CODEBASE HREF=\"\" />\n}. qq{\t</IMPLEMENTATION>\n}. qq{</SOFTPKG>\n}" > XML-Parser-Expat.ppd
+
 # --- MakeMaker postamble section:
 
+# add this to list of MrC dynamic libs
+# Expat.Lib.MrC has to be built before this makefile is run; use the MPW worksheet for PPC in order
+# to build Expat.Lib.MrC for MacPerl 5.6.1 (dynamic loading for PPC only)
+
+DYNAMIC_STDLIBS_MRC		+= ":expat-1.95.2:lib:Expat.Lib.MrC" 
 
 # --- MakeMaker rulez section:
 
 install install_static install_dynamic :: 
-	$(PERL_SRC)PerlInstall -l $(PERL_LIB)
-	$(PERL_SRC)PerlInstall -l "MacintoshHD:MacPerl Ä:site_perl:"
+	$(MACPERL_SRC)PerlInstall -l $(PERL_LIB)
 
-.INCLUDE : $(PERL_SRC)BulkBuildRules.mk
+.INCLUDE : $(MACPERL_SRC)BulkBuildRules.mk
 
 
 # End.

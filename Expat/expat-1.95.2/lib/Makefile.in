@@ -42,8 +42,6 @@ oldincludedir = /usr/include
 
 subdir = lib
 
-DESTDIR =
-
 top_builddir = ..
 
 INSTALL = @INSTALL@
@@ -77,8 +75,9 @@ mkinstalldirs = $(SHELL) $(top_srcdir)/conftools/mkinstalldirs
 CONFIG_HEADER = ../config.h
 CONFIG_CLEAN_FILES = 
 
-INCLUDES = -I$(srcdir) -I..
+INCLUDES = -I$(srcdir) -I. -I..
 DEFS = @DEFS@ -DPACKAGE='"$(PACKAGE)"' -DVERSION='"$(PACKAGE)_$(VERSION)"'
+
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS = @LDFLAGS@
 LIBS = @LIBS@
@@ -106,24 +105,10 @@ all: $(LIBRARY)
 .PHONY: all clean distclean maintainer-clean
 
 .c.o:
-	@echo '$(COMPILE) -c $<'; \
-	$(COMPILE) -Wp,-MD,.deps/$(*F).pp -c $<
-	@-cp .deps/$(*F).pp .deps/$(*F).P; \
-	tr ' ' '\012' < .deps/$(*F).pp \
-	  | sed -e 's/^\\$$//' -e '/^$$/ d' -e '/:$$/ d' -e 's/$$/ :/' \
-	    >> .deps/$(*F).P; \
-	rm .deps/$(*F).pp
+	$(COMPILE) -c $<
 
 .c.lo:
-	@echo '$(LTCOMPILE) -c $<'; \
-	test -d .deps || mkdir .deps ; \
-	$(LTCOMPILE) -Wp,-MD,.deps/$(*F).pp -c $<
-	@-sed -e 's/^\([^:]*\)\.o[ 	]*:/\1.lo \1.o :/' \
-	  < .deps/$(*F).pp > .deps/$(*F).P; \
-	tr ' ' '\012' < .deps/$(*F).pp \
-	  | sed -e 's/^\\$$//' -e '/^$$/ d' -e '/:$$/ d' -e 's/$$/ :/' \
-	    >> .deps/$(*F).P; \
-	rm -f .deps/$(*F).pp
+	$(LTCOMPILE) -c $<
 
 Makefile: $(srcdir)/Makefile.in  $(top_builddir)/config.status
 	cd $(top_builddir) \
@@ -132,26 +117,31 @@ Makefile: $(srcdir)/Makefile.in  $(top_builddir)/config.status
 $(top_builddir)/config.status: $(top_builddir)/configure
 	cd $(top_builddir) && $(MAKE) config.status
 
-$(top_builddir)/config.h: $(top_builddir)/config.hin
+$(top_builddir)/config.h: $(top_builddir)/config.h.in
 	cd $(top_builddir) && $(MAKE) config.h
 
 clean:
 	rm -f $(LIBRARY) *.o *.lo *~
-	rm -rf .libs _libs .deps
+	rm -rf .libs _libs
 
 distclean: clean
 	rm -f Makefile
 
 maintainer-clean: distclean
 
+check:	$(SUBDIRS)
+	@echo
+	@echo This package does not yet have a regression test.
+	@echo
+
 install: $(LIBRARY) $(APIHEADER)
-	$(mkinstalldirs) $(DESTDIR)$(libdir) $(DESTDIR)$(includedir)
-	$(LIBTOOL)  --mode=install $(INSTALL) $(LIBRARY) $(DESTDIR)$(libdir)/$(LIBRARY)
-	$(INSTALL_DATA) $(APIHEADER) $(DESTDIR)$(includedir)
+	$(mkinstalldirs) $(libdir) $(includedir)
+	$(LIBTOOL) --mode=install $(INSTALL) $(LIBRARY) $(libdir)/$(LIBRARY)
+	$(INSTALL_DATA) $(APIHEADER) $(includedir)
 
 uninstall:
-	$(LIBTOOL)  --mode=uninstall rm -f $(DESTDIR)$(libdir)/$(LIBRARY);
-	rm -f $(DESTDIR)$(libdir)/$(APIHEADER)
+	$(LIBTOOL) --mode=uninstall rm -f $(libdir)/$(LIBRARY);
+	rm -f $(libdir)/$(APIHEADER)
 
 $(LIBRARY): $(LTOBJECTS)
 	$(LINK) -rpath $(libdir) $(LDFLAGS) $(LTOBJECTS)

@@ -24,7 +24,11 @@ if ($have_File_Spec) {
 		    File::Spec->curdir);
 }
 else {
-  @Encoding_Path = (grep(-d $_, map($_ . '/XML/Parser/Encodings', @INC)), '.');
+  if ($^O eq 'MacOS') {
+  	@Encoding_Path = (grep(-d $_, map($_ . 'XML:Parser:Encodings', @INC)), ':');
+  } else {
+    @Encoding_Path = (grep(-d $_, map($_ . '/XML/Parser/Encodings', @INC)), '.');
+  }
 }
   
 
@@ -77,9 +81,16 @@ sub load_encoding {
   $file .= '.enc' unless $file =~ /\.enc$/;
   unless ($file =~ m!^/!) {
     foreach (@Encoding_Path) {
-      my $tmp = ($have_File_Spec
-		 ? File::Spec->catfile($_, $file)
-		 : "$_/$file");
+      my $tmp;
+	  if ($have_File_Spec) {
+	    $tmp = File::Spec->catfile($_, $file);
+	  } else {
+	    if ($^O eq 'MacOS') {
+		  $tmp = ($_ =~ /:$/) ? "$_$file" : "$_:$file";
+		} else {
+		  $tmp = "$_/$file";
+		}
+	  }
       if (-e $tmp) {
 	$file = $tmp;
 	last;
