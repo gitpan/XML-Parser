@@ -8,13 +8,13 @@ my $internal_subset =<<'End_of_internal;';
 [
   <!ENTITY % foo "IGNORE">
   <!ENTITY % bar "INCLUDE">
-  <!ENTITY more SYSTEM "t/ext2.ent">
+  <!ENTITY more SYSTEM "ext2.ent">
 ]
 End_of_internal;
 
 my $doc =<<"End_of_doc;";
 <?xml version="1.0" encoding="ISO-8859-1"?>
-<!DOCTYPE foo SYSTEM "t/foo.dtd"
+<!DOCTYPE foo SYSTEM "foo.dtd"
 $internal_subset>
 <foo>Happy, happy
 <bar>&joy;, &joy;</bar>
