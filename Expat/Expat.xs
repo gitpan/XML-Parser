@@ -176,7 +176,6 @@ typedef struct {
   SV* endcd_sv;
 } CallbackVector;
 
-static long AttDefaultFlag = 0;
 
 static HV* EncodingTable = NULL;
 
@@ -407,6 +406,8 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
 
       ret = XML_Parse(parser, buff, br, done);
 
+      SPAGAIN; /* resync local SP in case callbacks changed global stack */
+
       if (! ret)
 	break;
 
@@ -420,7 +421,7 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
     PUSHMARK(SP);
     XPUSHs(ioref);
     PUTBACK ;
-    perl_call_method("close", G_DISCARD);
+    perl_call_method("close", G_VOID);
   }
 
   if (! cbv->delim) {
@@ -592,7 +593,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
 	  XPUSHs((strnEQ(stand, "no", 2)) ? &PL_sv_no : &PL_sv_yes);
 
 	PUTBACK;
-	perl_call_sv(cbv->xmldec_sv, G_DISCARD);
+	perl_call_sv(cbv->xmldec_sv, G_VOID);
 
 	cbv->in_local_hndlr = 0;
 	cbv->doctype_buffer = 0;
@@ -862,7 +863,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
 	if (cbv->attfixed)
 	  XPUSHs(&PL_sv_yes);
 	PUTBACK;
-	perl_call_sv(cbv->attdcl_sv, G_DISCARD);
+	perl_call_sv(cbv->attdcl_sv, G_VOID);
 
 	cbv->in_local_hndlr = 0;
       }
@@ -898,7 +899,7 @@ declaration_end:
 	XPUSHs(sv_2mortal(nmsv));
 	XPUSHs(sv_2mortal(mynewSVpv(val, cbv->entval_len)));
 	PUTBACK;
-	perl_call_sv(cbv->entdcl_sv, G_DISCARD);
+	perl_call_sv(cbv->entdcl_sv, G_VOID);
 
 	cbv->in_local_hndlr = 0;
 	called_handler = 1;
@@ -936,7 +937,7 @@ declaration_end:
 	  XPUSHs(sv_2mortal(mynewSVpv(notation, cbv->entnot_len)));
 	}
 	PUTBACK;
-	perl_call_sv(cbv->entdcl_sv, G_DISCARD);
+	perl_call_sv(cbv->entdcl_sv, G_VOID);
 
 	cbv->in_local_hndlr = 0;
 	called_handler = 1;
@@ -955,7 +956,7 @@ declaration_end:
 	XPUSHs(sv_2mortal(mynewSVpv(name, cbv->elnam_len)));
 	XPUSHs(sv_2mortal(mynewSVpv(model, cbv->model_len)));
 	PUTBACK;
-	perl_call_sv(cbv->eledcl_sv, G_DISCARD);
+	perl_call_sv(cbv->eledcl_sv, G_VOID);
 
 	cbv->in_local_hndlr = 0;
 	called_handler = 1;
@@ -980,7 +981,7 @@ declaration_end:
     XPUSHs(cbv->self_sv);
     XPUSHs(sv_2mortal(mynewSVpv(start, cbv->dtb_len - cbv->dtb_offset)));
     PUTBACK;
-    perl_call_sv(cbv->dflt_sv, G_DISCARD);
+    perl_call_sv(cbv->dflt_sv, G_VOID);
   }
 
   cbv->local_parse_state = PS_Internaldecl;
@@ -1017,7 +1018,7 @@ doctype_end:
     if (intsub)
       XPUSHs(sv_2mortal(mynewSVpv(intsub, cbv->intsub_len)));
     PUTBACK;
-    perl_call_sv(cbv->doctyp_sv, G_DISCARD);
+    perl_call_sv(cbv->doctyp_sv, G_VOID);
 
     cbv->in_local_hndlr = 0;
   }
@@ -1040,7 +1041,7 @@ characterData(void *userData, const char *s, int len)
   PUSHs(cbv->self_sv);
   PUSHs(sv_2mortal(mynewSVpv((char*)s,len)));
   PUTBACK;
-  perl_call_sv(cbv->char_sv, G_DISCARD);
+  perl_call_sv(cbv->char_sv, G_VOID);
 
   FREETMPS;
   LEAVE;
@@ -1094,25 +1095,13 @@ startElement(void *userData, const char *name, const char **atts)
 	  attname = (do_ns ? gen_ns_name(*atts, cbv->nstab, cbv->nslst)
 		     : newSVpv((char *) *atts, 0));
 	    
-	  if ((*atts)[-1] & 4) {
-	    /* This attribute was defaulted */
-	    
-	    if (SvIOKp(attname)) {
-	      SvIVX(attname) |= AttDefaultFlag;
-	    }
-	    else {
-	      sv_setiv(attname, (IV) AttDefaultFlag);
-	      SvPOK_on(attname);
-	    }
-	  }
-
 	  atts++;
 	  PUSHs(sv_2mortal(attname));
 	  if (*atts)
 	    PUSHs(sv_2mortal(newSVpv((char*)*atts++,0)));
 	}
       PUTBACK;
-      perl_call_sv(cbv->start_sv, G_DISCARD);
+      perl_call_sv(cbv->start_sv, G_VOID);
 
       FREETMPS;
       LEAVE;
@@ -1159,7 +1148,7 @@ endElement(void *userData, const char *name)
       PUSHs(cbv->self_sv);
       PUSHs(elname);
       PUTBACK;
-      perl_call_sv(cbv->end_sv, G_DISCARD);
+      perl_call_sv(cbv->end_sv, G_VOID);
 
       FREETMPS;
       LEAVE;
@@ -1183,7 +1172,7 @@ processingInstruction(void *userData, const char *target, const char *data)
   PUSHs(sv_2mortal(newSVpv((char*)target,0)));
   PUSHs(sv_2mortal(newSVpv((char*)data,0)));
   PUTBACK;
-  perl_call_sv(cbv->proc_sv, G_DISCARD);
+  perl_call_sv(cbv->proc_sv, G_VOID);
 
   FREETMPS;
   LEAVE;
@@ -1203,7 +1192,7 @@ commenthandle(void *userData, const char *string)
   PUSHs(cbv->self_sv);
   PUSHs(sv_2mortal(newSVpv((char*) string, 0)));
   PUTBACK;
-  perl_call_sv(cbv->cmnt_sv, G_DISCARD);
+  perl_call_sv(cbv->cmnt_sv, G_VOID);
 
   FREETMPS;
   LEAVE;
@@ -1222,7 +1211,7 @@ startCdata(void *userData)
     PUSHMARK(sp);
     XPUSHs(cbv->self_sv);
     PUTBACK;
-    perl_call_sv(cbv->startcd_sv, G_DISCARD);
+    perl_call_sv(cbv->startcd_sv, G_VOID);
 
     FREETMPS;
     LEAVE;
@@ -1242,7 +1231,7 @@ endCdata(void *userData)
     PUSHMARK(sp);
     XPUSHs(cbv->self_sv);
     PUTBACK;
-    perl_call_sv(cbv->endcd_sv, G_DISCARD);
+    perl_call_sv(cbv->endcd_sv, G_VOID);
 
     FREETMPS;
     LEAVE;
@@ -1263,7 +1252,7 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
   PUSHs(prefix ? sv_2mortal(newSVpv((char *)prefix, 0)) : &PL_sv_undef);
   PUSHs(uri ? sv_2mortal(newSVpv((char *)uri, 0)) : &PL_sv_undef);
   PUTBACK;
-  perl_call_method("NamespaceStart", G_DISCARD);
+  perl_call_method("NamespaceStart", G_VOID);
 
   FREETMPS;
   LEAVE;
@@ -1282,7 +1271,7 @@ nsEnd(void *userdata, const XML_Char *prefix) {
   PUSHs(cbv->self_sv);
   PUSHs(prefix ? sv_2mortal(newSVpv((char *)prefix, 0)) : &PL_sv_undef);
   PUTBACK;
-  perl_call_method("NamespaceEnd", G_DISCARD);
+  perl_call_method("NamespaceEnd", G_VOID);
 
   FREETMPS;
   LEAVE;
@@ -1310,7 +1299,7 @@ defaulthandle(void *userData, const char *string, int len)
   PUSHs(cbv->self_sv);
   PUSHs(sv_2mortal(mynewSVpv((char*)string, len)));
   PUTBACK;
-  perl_call_sv(cbv->dflt_sv, G_DISCARD);
+  perl_call_sv(cbv->dflt_sv, G_VOID);
 
   FREETMPS;
   LEAVE;
@@ -1339,7 +1328,7 @@ unparsedEntityDecl(void *userData,
   PUSHs(pubid ? sv_2mortal(newSVpv((char*) pubid, 0)) : &PL_sv_undef);
   PUSHs(sv_2mortal(newSVpv((char*) notation, 0)));
   PUTBACK;
-  perl_call_sv(cbv->unprsd_sv, G_DISCARD);
+  perl_call_sv(cbv->unprsd_sv, G_VOID);
 
   FREETMPS;
   LEAVE;
@@ -1380,7 +1369,7 @@ notationDecl(void *userData,
     XPUSHs(sv_2mortal(newSVpv((char *) pubid, 0)));
 
   PUTBACK;
-  perl_call_sv(cbv->notation_sv, G_DISCARD);
+  perl_call_sv(cbv->notation_sv, G_VOID);
 }  /* End notationDecl */
 
 static int
@@ -1453,8 +1442,9 @@ externalEntityRef(XML_Parser parser,
 	     cbv->offset   = 0;
 	     cbv->bufflen  = eslen;
 	     ret = XML_Parse(entpar, entstr, eslen, 1);
-
 	   }
+
+	   SPAGAIN;  /* possible callbacks in conditional above */
 
 	   if (! ret)
 	     append_error(entpar, NULL);
@@ -1563,7 +1553,7 @@ unknownEncoding(void *unused, const char *name, XML_Encoding *info)
     PUSHMARK(sp);
     XPUSHs(sv_2mortal(mynewSVpv(buff,namelen)));
     PUTBACK;
-    perl_call_pv("XML::Parser::Expat::load_encoding", G_DISCARD);
+    perl_call_pv("XML::Parser::Expat::load_encoding", G_VOID);
     
     encinfptr = hv_fetch(EncodingTable, buff, namelen, 0);
     FREETMPS;
@@ -1654,11 +1644,6 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 	  CallbackVector *cbv;
 	  char *enc = (char *) (SvTRUE(enc_sv) ? SvPV(enc_sv,PL_na) : 0);
 	  SV ** spp;
-
-	  if (! AttDefaultFlag) {
-	    SV * adf = perl_get_sv("XML::Parser::Expat::Attdef_Flag", 0);
-	    AttDefaultFlag = SvIV(adf);
-	  }
 
 	  Newz(320, cbv, 1, CallbackVector);
 	  cbv->self_sv = SvREFCNT_inc(self_sv);
@@ -1810,6 +1795,7 @@ XML_ParseString(parser, s)
 	  cbv->offset = 0;
 	  cbv->bufflen = len;
 	  RETVAL = XML_Parse(parser, s, len, 1);
+	  SPAGAIN; /* XML_Parse might have changed stack pointer */
 	  if (! RETVAL)
 	    append_error(parser, NULL);
 	}
@@ -1836,6 +1822,7 @@ XML_ParseStream(parser, ioref, delim)
 	  }
 	      
 	  RETVAL = parse_stream(parser, ioref, 0);
+	  SPAGAIN; /* parse_stream might have changed stack pointer */
 	}
 
     OUTPUT:
@@ -2236,7 +2223,7 @@ XML_DefaultCurrent(parser)
 					  + cbv->dtb_offset,
 					  cbv->dtb_len - cbv->dtb_offset)));
 	      PUTBACK;
-	      perl_call_sv(cbv->dflt_sv, G_DISCARD);
+	      perl_call_sv(cbv->dflt_sv, G_VOID);
 	    }
 	    else
 	      XML_DefaultCurrent(parser);
@@ -2292,6 +2279,10 @@ XML_GetCurrentColumnNumber(parser)
 
 long
 XML_GetCurrentByteIndex(parser)
+	XML_Parser			parser
+
+int
+XML_GetSpecifiedAttributeCount(parser)
 	XML_Parser			parser
 
 char *
@@ -2411,7 +2402,7 @@ XML_OriginalString(parser)
 	  if (cbv->buffstrt) {
 	    
 	    parsepos = XML_GetCurrentByteIndex(parser);
-	    parselim = XML_GetCurrentByteLimit(parser);
+	    parselim = parsepos + XML_GetCurrentByteCount(parser);
 
 	    if (parsepos > parselim)
 	      croak("OriginalString: Parse position > Parse limit");

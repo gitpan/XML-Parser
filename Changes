@@ -1,5 +1,23 @@
 Revision history for Perl extension XML::Parser.
 
+2.23 Mon Apr 26 21:30:28 EDT 1999
+	- Fixed a bug in the ExpatNB class reported by Gabe Beged-Dov
+	  <begeddov@jfinity.com>. The ErrorMessage attribute wasn't
+	  being initialized for ExpatNB. This should have been done in
+	  the Expat constructor.
+	- Applied patch provided by Nathan Kurz <nate@valleytel.net> to
+	  fix more perl stack manipulation errors in Expat.xs.
+	- Applied another patch by Nathan to change perl_call_sv flag
+	  from G_DISCARD to G_VOID for callbacks, which helps performance.
+	- Murata Makoto <murata@apsdc.ksp.fujixerox.co.jp> reported a
+	  problem on Win32 platforms that only showed up when UTF-16 was
+	  being used. The needed call to binmode was added to the parsefile
+	  methods.
+	- Added documentation for release method that was added in release
+	  2.20 to Expat pod. (Point raised by <mookie@undef.com>)
+	- Now using Version 19990425 of expat. No local patches.
+	- Added specified_attr method and made ineffective the is_defaulted
+	  method.
 2.22 Sun Apr  4 11:47:25 EDT 1999
 	- Loic Dachary <loic@ceic.com> reported a core dump with a small
 	  file with a comment that wasn't properly closed. Fixed in expat

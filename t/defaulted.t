@@ -21,9 +21,10 @@ sub st {
   if ($el eq 'bar') {
     my %atts = @_;
     my %isdflt;
-    while (@_) {
-      my $attname = shift;
-      $isdflt{$attname} = $xp->is_defaulted($attname);
+    my $specified = $xp->specified_attr;
+
+    for (my $i = $specified; $i < @_; $i += 2) {
+      $isdflt{$_[$i]} = 1;
     }
 
     if (defined $atts{xx}) {

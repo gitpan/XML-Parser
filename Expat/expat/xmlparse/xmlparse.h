@@ -162,6 +162,14 @@ typedef void (*XML_StartNamespaceDeclHandler)(void *userData,
 typedef void (*XML_EndNamespaceDeclHandler)(void *userData,
 					    const XML_Char *prefix);
 
+/* This is called if the document is not standalone (it has an
+external subset or a reference to a parameter entity, but does not
+have standalone="yes"). If this handler returns 0, then processing
+will not continue, and the parser will return a
+XML_ERROR_NOT_STANDALONE error. */
+
+typedef int (*XML_NotStandaloneHandler)(void *userData);
+
 /* This is called for a reference to an external parsed general entity.
 The referenced entity is not automatically parsed.
 The application can parse it immediately or later using
@@ -304,6 +312,10 @@ XML_SetNamespaceDeclHandler(XML_Parser parser,
 			    XML_EndNamespaceDeclHandler end);
 
 void XMLPARSEAPI
+XML_SetNotStandaloneHandler(XML_Parser parser,
+			    XML_NotStandaloneHandler handler);
+
+void XMLPARSEAPI
 XML_SetExternalEntityRefHandler(XML_Parser parser,
 				XML_ExternalEntityRefHandler handler);
 
@@ -357,6 +369,12 @@ XML_SetBase(XML_Parser parser, const XML_Char *base);
 const XML_Char XMLPARSEAPI *
 XML_GetBase(XML_Parser parser);
 
+/* Returns the number of the attributes passed in last call to the
+XML_StartElementHandler that were specified in the start-tag rather
+than defaulted. */
+
+int XMLPARSEAPI XML_GetSpecifiedAttributeCount(XML_Parser parser);
+
 /* Parses some input. Returns 0 if a fatal error is detected.
 The last call to XML_Parse must have isFinal true;
 len may be zero for this call (or any other). */
@@ -409,7 +427,8 @@ enum XML_Error {
   XML_ERROR_UNKNOWN_ENCODING,
   XML_ERROR_INCORRECT_ENCODING,
   XML_ERROR_UNCLOSED_CDATA_SECTION,
-  XML_ERROR_EXTERNAL_ENTITY_HANDLING
+  XML_ERROR_EXTERNAL_ENTITY_HANDLING,
+  XML_ERROR_NOT_STANDALONE
 };
 
 /* If XML_Parse or XML_ParseBuffer have returned 0, then XML_GetErrorCode
@@ -428,7 +447,11 @@ of the sequence of characters that generated the event. */
 int XMLPARSEAPI XML_GetCurrentLineNumber(XML_Parser parser);
 int XMLPARSEAPI XML_GetCurrentColumnNumber(XML_Parser parser);
 long XMLPARSEAPI XML_GetCurrentByteIndex(XML_Parser parser);
-long XMLPARSEAPI XML_GetCurrentByteLimit(XML_Parser parser);
+
+/* Return the number of bytes in the current event.
+Returns 0 if the event is in an internal entity. */
+
+int XMLPARSEAPI XML_GetCurrentByteCount(XML_Parser parser);
 
 /* For backwards compatibility with previous versions. */
 #define XML_GetErrorLineNumber XML_GetCurrentLineNumber

@@ -11,9 +11,12 @@ Expat/expat/Makefile
 Expat/expat/bin/xmlparse.dll
 Expat/expat/bin/xmltok.dll
 Expat/expat/bin/xmlwf.exe
+Expat/expat/expat.dsw
 Expat/expat/expat.html
 Expat/expat/expat.mak
 Expat/expat/gennmtab/gennmtab.c
+Expat/expat/gennmtab/gennmtab.dsp
+Expat/expat/gplelect.html
 Expat/expat/lib/xmlparse.lib
 Expat/expat/lib/xmltok.lib
 Expat/expat/sample/build.bat
@@ -21,9 +24,8 @@ Expat/expat/sample/elements.c
 Expat/expat/xmlparse/hashtable.c
 Expat/expat/xmlparse/hashtable.h
 Expat/expat/xmlparse/xmlparse.c
-Expat/expat/xmlparse/xmlparse.c.orig
+Expat/expat/xmlparse/xmlparse.dsp
 Expat/expat/xmlparse/xmlparse.h
-Expat/expat/xmlparse/xmlparse.h.orig
 Expat/expat/xmltok/asciitab.h
 Expat/expat/xmltok/dllmain.c
 Expat/expat/xmltok/iasciitab.h
@@ -34,6 +36,7 @@ Expat/expat/xmltok/xmldef.h
 Expat/expat/xmltok/xmlrole.c
 Expat/expat/xmltok/xmlrole.h
 Expat/expat/xmltok/xmltok.c
+Expat/expat/xmltok/xmltok.dsp
 Expat/expat/xmltok/xmltok.h
 Expat/expat/xmltok/xmltok_impl.c
 Expat/expat/xmltok/xmltok_impl.h
@@ -44,7 +47,11 @@ Expat/expat/xmlwf/filemap.h
 Expat/expat/xmlwf/readfilemap.c
 Expat/expat/xmlwf/unixfilemap.c
 Expat/expat/xmlwf/win32filemap.c
+Expat/expat/xmlwf/xmlfile.c
+Expat/expat/xmlwf/xmlfile.h
+Expat/expat/xmlwf/xmltchar.h
 Expat/expat/xmlwf/xmlwf.c
+Expat/expat/xmlwf/xmlwf.dsp
 MANIFEST			This file
 Makefile.PL			perl MakeMaker script for XML::Parser
 Parser.pm			XML::Parser module

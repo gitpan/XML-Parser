@@ -14,7 +14,7 @@ use Carp;
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.22';
+  $VERSION = '2.23';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
 }
@@ -177,6 +177,7 @@ sub parsefile {
   my $file = shift;
   local(*FILE);
   open(FILE, $file) or  croak "Couldn't open $file:\n$!";
+  binmode(FILE);
   my @ret;
   my $ret;
   
@@ -965,7 +966,7 @@ module from CPAN.
 
 Larry Wall <F<larry@wall.org>> wrote version 1.0.
 
-Clark Cooper <F<cooperc@netheaven.com>> picked up support, changed the API
+Clark Cooper <F<coopercc@netheaven.com>> picked up support, changed the API
 for this version (2.x), provided documentation,
 and added some standard package features.
 

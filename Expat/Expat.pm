@@ -5,7 +5,7 @@ require 5.004;
 use English;
 use strict;
 use vars qw($VERSION @ISA %Handler_Setters %Encoding_Table @Encoding_Path
-	    $have_File_Spec $Attdef_Flag);
+	    $have_File_Spec);
 use Carp;
 
 use IO::Handle;
@@ -13,10 +13,7 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.22" ;
-$Attdef_Flag = 1 << 30;
-
-my $namespace_mask = $Attdef_Flag - 1;
+$VERSION = "2.23" ;
 
 $have_File_Spec = do 'File/Spec.pm';
 
@@ -59,6 +56,7 @@ sub new {
   $args{Used} = 0;
   $args{Context} = [];
   $args{Namespaces} ||= 0;
+  $args{ErrorMessage} ||= '';
   if ($args{Namespaces}) {
     $args{Namespace_Table} = {};
     $args{Namespace_List} = [undef];
@@ -223,15 +221,14 @@ sub element_index {
 sub namespace {
   my ($self, $name) = @_;
   local($WARNING) = 0;
-  $self->{Namespace_List}->[int($name) & $namespace_mask];
+  $self->{Namespace_List}->[int($name)];
 }
 
 sub eq_name {
   my ($self, $nm1, $nm2) = @_;
   local($WARNING) = 0;
 
-  ($namespace_mask & int($nm1)) == ($namespace_mask & int($nm2))
-    and $nm1 eq $nm2;
+  int($nm1) == int($nm2) and $nm1 eq $nm2;
 }
 
 sub generate_ns_name {
@@ -320,9 +317,19 @@ sub NamespaceEnd {
 
 sub is_defaulted {
   my ($self, $attname) = @_;
-  local($WARNING) = 0;
 
-  return (int($attname) & $Attdef_Flag) == $Attdef_Flag;
+  warn <<'End_of_Warning;';
+The is_defaulted method no longer works.
+Please use the specified_attr method instead. The is_defaulted method will
+be removed altogether in a future version.
+End_of_Warning;
+  return 0;
+}
+
+sub specified_attr {
+  my $self = shift;
+  
+  GetSpecifiedAttributeCount($self->{Parser});
 }
 
 sub finish {
@@ -388,7 +395,6 @@ sub parse {
   my $parser = $self->{Parser};
   my $ioref;
   my $result = 0;
-  $self->{ErrorMessage} ||= '';
   
   if (defined $arg) {
     if (ref($arg) and UNIVERSAL::isa($arg, 'IO::Handler')) {
@@ -428,6 +434,7 @@ sub parsefile {
   croak "Parser has already been used" if $self->{Used};
   local(*FILE);
   open(FILE, $_[0]) or  croak "Couldn't open $_[0]:\n$!";
+  binmode(FILE);
   my $ret = $self->parse(*FILE);
   close(FILE);
   $ret;
@@ -931,14 +938,33 @@ parsefile has been called previously for this instance.
 
 =item is_defaulted(ATTNAME)
 
-When passed an attribute name received through the start handler, returns
-true if the attribute was supplied as a default.
+NO LONGER WORKS. To find out if an attribute is defaulted please use
+the specified_attr method.
+
+=item specified_attr
+
+When the start handler receives lists of attributes and values, the
+non-defaulted (i.e. explicitly specified) attributes occur in the list
+first. This method returns the number of specified items in the list.
+So if this number is equal to the length of the list, there were no
+defaulted values. Otherwise the number points to the index of the
+first defaulted attribute name.
 
 =item finish
 
 Unsets all handlers (including internal ones that set context), but expat
 continues parsing to the end of the document or until it finds an error.
 It should finish up a lot faster than with the handlers set.
+
+=item release
+
+There are data structures used by XML::Parser::Expat that have circular
+references. This means that these structures will never be garbage
+collected unless these references are explicitly broken. Calling this
+method breaks those references (and makes the instance unusable.)
+
+Normally, higher level calls handle this for you, but if you are using
+XML::Parser::Expat directly, then it's your responsibility to call it.
 
 =back
 
