@@ -1,4 +1,12 @@
-27 July 1999
+28 August 1999
+
+***
+
+Patch to XML-Parser-2.26: Expat.xs is patched (the patch is found in the Extra
+folder) to fix a problem with the setHandlers() method under perl 5.004, which
+includes MacPerl.
+
+***
 
 This is a PPC/CFM68K shared library for MacOS. Please refer to the original
 README (below) for an explanation of changes from previous versions. Be advised
