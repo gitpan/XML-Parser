@@ -21,7 +21,7 @@ push(@extras,
 
 push(@extras,
      ABSTRACT_FROM => 'Parser.pm',
-     AUTHOR        => 'Clark Cooper (coopercl@sch.ge.com)')
+     AUTHOR        => 'Clark Cooper (coopercc@netheaven.com)')
     if ($ExtUtils::MakeMaker::Version >= 5.4301);
      
 WriteMakefile(

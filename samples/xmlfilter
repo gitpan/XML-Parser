@@ -1,8 +1,8 @@
 #!/usr/local/bin/perl -w
 #
-# $Revision: 1.6 $
+# $Revision: 1.10 $
 #
-# $Date: 1999/01/03 16:52:38 $
+# $Date: 1999/02/28 20:38:04 $
 
 use XML::Parser;
 
@@ -33,10 +33,10 @@ be a well-formed XML document.
     [-+]el:elnamepat
 		Drop (or keep) element whose type name matches elnamepat.
 
-    [-+]att:attname]
+    [-+]att:attname
 		Drop (or keep) elements which have an attribute = attname.
 
-    [-+]att:attname:attvalpat]
+    [-+]att:attname:attvalpat
 		Drop (or keep) elements which have an attribute = attname
 		and for which the attribute value matches attvalpat.
 End_of_Usage;
@@ -169,7 +169,11 @@ my $p = new XML::Parser(ErrorContext => 2,
 					 }
 			);
 
-$p->setHandlers(Char => \&char_handler) if $pass;
+if ($pass) {
+  $p->setHandlers(Char       => \&char_handler,
+		  CdataStart => \&cdata_start,
+		  CdataEnd   => \&cdata_end);
+}
 
 $p->parsefile($doc);
 
@@ -238,7 +242,7 @@ sub start_handler
 	    $val =~ s/&/\&amp;/g;
 	    $val =~ s/</\&lt;/g;
 	    $val =~ s/>/\&gt;/g;
-
+	    $val =~ s/'/\&apos;/g;
 	    print " $id='$val'";
 	}
 	print ">";
@@ -282,8 +286,8 @@ sub char_handler
     if (length($text)) {
 
       unless ($in_cdata) {
-	$text =~ s/</\&lt;/g;
 	$text =~ s/&/\&amp;/g;
+	$text =~ s/</\&lt;/g;
 	$text =~ s/>/\&gt;/g;
       }
 

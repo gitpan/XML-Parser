@@ -1,5 +1,32 @@
 Revision history for Perl extension XML::Parser.
 
+2.20 Sun Feb 28 15:35:52 EST 1999
+	- Fixed miscellaneous bugs in xmlfilter.
+	- In the default external entity handler, prepend the base only
+	  for relative URLs.
+	- Chris Nandor <pudge@pobox.com> provided patches for building
+	  on Macintosh.
+	- As suggested by Matt Sergeant <Matthew.Sergeant@eml.ericsson.se>,
+	  added the finish method to Expat.
+	- Matt also provided a fix to a bug he discovered in the Streams
+	  style.
+	- Fixed a parse position bug reported by Enno Derksen <enno@att.com>
+	  that was affecting both original_string and position_in_context.
+	- Fixed a gross memory leak reported by David Megginson,
+	  <david@megginson.com>: there was a circular reference to the Expat
+	  object and the internal end handler for context was not freeing
+	  element names after they were removed from the context stack.
+	- Now using expat Version 19990109
+	  (Plus any patches in Expat/expat.patches)
+	- Added is_defaulted method to Expat to tell if an attribute
+	  was defaulted. (Requested by Enno Derksen for XML::DOM.)
+	- Matt Sergeant <Matthew.Sergeant@eml.ericcson.se> reported that
+	  the XML::Parser parse methods weren't propagating array context
+	  to the Final handler. Now they are.
+	- Fixed more memory leaks (again reported by David Megginson).
+	  The SVs pointing to the handlers weren't being reclaimed when
+	  the callback vector was freed.
+	- Added the element_index method to Expat.
 2.19 Sun Jan  3 11:23:45 EST 1999
 	- When the recognized string is long enough, expat uses multiple
 	  calls to reportDefault. Fixed recString handler in Expat.xs to

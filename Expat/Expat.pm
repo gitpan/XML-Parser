@@ -4,7 +4,8 @@ require 5.004;
 
 use English;
 use strict;
-use vars qw($VERSION @ISA %Handler_Setters %Encoding_Table @Encoding_Path);
+use vars qw($VERSION @ISA %Handler_Setters %Encoding_Table @Encoding_Path
+	    $have_File_Spec $Attdef_Flag);
 use Carp;
 
 use IO::Handle;
@@ -12,10 +13,24 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.19" ;
+$VERSION = "2.20" ;
+$Attdef_Flag = 1 << 30;
+
+my $namespace_mask = $Attdef_Flag - 1;
+
+$have_File_Spec = do 'File/Spec.pm';
 
 %Encoding_Table = ();
-@Encoding_Path = (grep(-d $_, map($_ . '/XML/Parser/Encodings', @INC)), '.');
+if ($have_File_Spec) {
+  @Encoding_Path = (grep(-d $_,
+			 map(File::Spec->catdir($_, qw(XML Parser Encodings)),
+			     @INC)),
+		    File::Spec->curdir);
+}
+else {
+  @Encoding_Path = (grep(-d $_, map($_ . '/XML/Parser/Encodings', @INC)), '.');
+}
+  
 
 bootstrap XML::Parser::Expat $VERSION;
 
@@ -59,7 +74,9 @@ sub load_encoding {
   $file .= '.enc' unless $file =~ /\.enc$/;
   unless ($file =~ m!^/!) {
     foreach (@Encoding_Path) {
-      my $tmp = "$_/$file";
+      my $tmp = ($have_File_Spec
+		 ? File::Spec->catfile($_, $file)
+		 : "$_/$file");
       if (-e $tmp) {
 	$file = $tmp;
 	last;
@@ -190,17 +207,24 @@ sub depth {
   int(@{$self->{Context}});
 }
 
+sub element_index {
+  my ($self) = @_;
+
+  ElementIndex($self->{Parser});
+}
+
 sub namespace {
   my ($self, $name) = @_;
   local($WARNING) = 0;
-  $self->{Namespace_List}->[$name];
+  $self->{Namespace_List}->[int($name) & $namespace_mask];
 }
 
 sub eq_name {
   my ($self, $nm1, $nm2) = @_;
   local($WARNING) = 0;
 
-  $nm1 == $nm2 and $nm1 eq $nm2;
+  ($namespace_mask & int($nm1)) == ($namespace_mask & int($nm2))
+    and $nm1 eq $nm2;
 }
 
 sub generate_ns_name {
@@ -210,6 +234,19 @@ sub generate_ns_name {
     GenerateNSName($name, $namespace, $self->{Namespace_Table},
 		   $self->{Namespace_List})
       : $name;
+}
+
+sub is_defaulted {
+  my ($self, $attname) = @_;
+  local($WARNING) = 0;
+
+  return (int($attname) & $Attdef_Flag) == $Attdef_Flag;
+}
+
+sub finish {
+  my ($self) = @_;
+  my $parser = $self->{Parser};
+  UnsetAllHandlers($parser);
 }
 
 sub position_in_context {
@@ -231,6 +268,11 @@ sub position_in_context {
   }
   
   $ret;
+}
+
+sub release {
+  my $self = shift;
+  ParserRelease($self->{Parser});
 }
 
 sub DESTROY {
@@ -645,6 +687,14 @@ method to create the NAME argument.
 
 Returns the size of the context list.
 
+=item element_index
+
+Returns an integer that is the depth-first visit order of the current
+element. This will be zero outside of the root element. Note that
+in start and end handlers, you're outside of the element that the
+corresponding tags delimit. For example, this would return 0 when
+called from the start handler for the root element start tag.
+
 =item position_in_context(LINES)
 
 Returns a string that shows the current parse position. LINES should be
@@ -670,6 +720,17 @@ This method is deprecated in favor of the parse method.
 
 Parses the XML document in the given file. Will die if parsestring or
 parsefile has been called previously for this instance.
+
+= item is_defaulted(ATTNAME)
+
+When passed an attribute name received through the start handler, returns
+true if the attribute was supplied as a default.
+
+=item finish
+
+Unsets all handlers (including internal ones that set context), but expat
+continues parsing to the end of the document or until it finds an error.
+It should finish up a lot faster than with the handlers set.
 
 =back
 
@@ -699,7 +760,7 @@ explicitly load an encoding not contained in the @Encoding_Path list.
 
 Larry Wall <F<larry@wall.org>> wrote version 1.0.
 
-Clark Cooper <F<coopercl@sch.ge.com>> picked up support, changed the API
+Clark Cooper <F<coopercc@netheaven.com>> picked up support, changed the API
 for this version (2.x), provided documentation, and added some standard
 package features.
 

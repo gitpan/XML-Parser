@@ -71,8 +71,10 @@ samples/xmlstats		A utility to report on element statistics
 t/astress.t			Test script
 t/cdata.t			Test script
 t/decl.t			Test script
+t/defaulted.t			Test script
 t/encoding.t			Test script
 t/external_ent.t		Test script
 t/file.t			Test script
+t/finish.t			Test script
 t/namespaces.t			Test script
 t/stream.t			Test script

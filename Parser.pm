@@ -14,7 +14,7 @@ use Carp;
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.19';
+  $VERSION = '2.20';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
 }
@@ -123,13 +123,22 @@ sub parse {
   &$init($expat)
     if defined($init);
   
+  my @result = ();
   my $result = $expat->parse($arg);
   
   if ($result and defined($final)) {
-    $result = &$final($expat);
+    if (wantarray) {
+      @result = &$final($expat);
+    }
+    else {
+      $result = &$final($expat);
+    }
   }
   
-  $result;
+  $expat->release;
+
+  return unless defined wantarray;
+  return wantarray ? @result : $result;
 }				# End of parse
 
 sub parsestring {
@@ -142,16 +151,25 @@ sub parsefile {
   my $file = shift;
   local(*FILE);
   open(FILE, $file) or  croak "Couldn't open $file:\n$!";
+  my @ret;
   my $ret;
   
-  eval {
-    $ret = $self->parse(*FILE, @_);
-  };
+  if (wantarray) {
+    eval {
+      @ret = $self->parse(*FILE, @_);
+    };
+  }
+  else {
+    eval {
+      $ret = $self->parse(*FILE, @_);
+    };
+  }
   my $err = $@;
   close(FILE);
   die $err if $err;
   
-  $ret;
+  return unless defined wantarray;
+  return wantarray ? @ret : $ret;
 }				# End of parsefile
 
 my %External_Entity_Table = ();
@@ -163,9 +181,13 @@ sub default_ext_ent_handler {
 
   my $name = $sys;
 
-  if (defined($base)) {
-    $name = $base . $sys;
-  }
+  # Prepend base only for relative URLs
+
+  if (defined($base)
+      and not ($name =~ m!^(?:/|\w+:)!))
+    {
+      $name = $base . $sys;
+    }
 
   if ($name =~ s/^(\w+)://) {
     my $method = $1;
@@ -451,7 +473,7 @@ sub doText {
   my $expat = shift;
   $_ = $expat->{Text};
   
-  if ($_) {
+  if (length($_)) {
     my $sub = $expat->{Pkg} . "::Text";
     if (defined(&$sub)) {
       &$sub($expat);
@@ -672,11 +694,11 @@ This event is generated when a processing instruction is recognized.
 
 This event is generated when a comment is recognized.
 
-=item * CdataStart	(Expat)
+=head2 CdataStart	(Expat)
 
 This is called at the start of a CDATA section.
 
-=item * CdataEnd	(Expat)
+=head2 CdataEnd		(Expat)
 
 This is called at the end of a CDATA section.
 
@@ -867,7 +889,7 @@ Called at conclusion of the parse.
 
 =head1 ENCODINGS
 
-XML documents may be in encoded in character sets other than Unicode as
+XML documents may be encoded in character sets other than Unicode as
 long as they may be mapped into the Unicode character set. Expat has
 further restrictions on encodings. Read the xmlparse.h header file in
 the expat distribution to see details on these restrictions.
@@ -890,7 +912,7 @@ module from CPAN.
 
 Larry Wall <F<larry@wall.org>> wrote version 1.0.
 
-Clark Cooper <F<coopercl@sch.ge.com>> picked up support, changed the API
+Clark Cooper <F<cooperc@netheaven.com>> picked up support, changed the API
 for this version (2.x), provided documentation,
 and added some standard package features.
 

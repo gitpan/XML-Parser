@@ -75,6 +75,12 @@ typedef enum {
 typedef struct {
   SV* self_sv;
   XML_Parser p;
+
+  unsigned int st_serial;
+  unsigned int st_serial_stackptr;
+  unsigned int st_serial_stacksize;
+  unsigned int * st_serial_stack;
+
   SV *recstring;
   char *buffstrt;
   int bufflen;
@@ -163,6 +169,8 @@ typedef struct {
   SV* startcd_sv;
   SV* endcd_sv;
 } CallbackVector;
+
+static long AttDefaultFlag = 0;
 
 static HV* EncodingTable = NULL;
 
@@ -260,6 +268,9 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
   int		ret = 1;
   char *	msg = NULL;
   CallbackVector * cbv;
+  char		*buff = (char *) 0;
+  int		leftover = 0;
+  char		buffer[BUFSIZE];
 
   cbv = (CallbackVector*) XML_GetUserData(parser);
 
@@ -307,17 +318,27 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
   }
 
   for (cbv->offset = 0, cbv->prev_offset = 0; ! done;
-       cbv->prev_offset = cbv->offset, cbv->offset += br)
+       cbv->prev_offset = cbv->offset)
     {
-      char *buff = XML_GetBuffer(parser, BUFSIZE);
+      int	bufleft;
 
-      if (! buff) {
-	msg = "Ran out of memory";
-	break;
+      if (buff) {
+	cbv->offset = XML_GetCurrentByteIndex(parser);
+	leftover += br - (cbv->offset - cbv->prev_offset);
+	if (leftover < 0 || leftover >= BUFSIZE)
+	  croak("parse_stream: bug in parse position calculation");
+	bufleft = BUFSIZE - leftover;
+	Move(&buffer[bufleft], buffer, leftover, char);
+	buff = &buffer[leftover];
       }
-
+      else {
+	leftover = 0;
+	buff = buffer;
+	bufleft = BUFSIZE;
+      }
+      
       if (cbv->delim) {
-	br = lblen > BUFSIZE ? BUFSIZE : lblen;
+	br = lblen > bufleft ? bufleft : lblen;
 	if (br)
           Copy(linebuff, buff, br, char);
 	linebuff += br;
@@ -328,6 +349,8 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
 	int cnt;
 	SV * rdres;
 	char * tb;
+
+	sv_setiv(tsiz, bufleft);
 
 	PUSHMARK(SP);
 	EXTEND(SP, 3);
@@ -360,11 +383,11 @@ parse_stream(XML_Parser parser, SV * ioref, int close_it)
 	done = 1;
       }
       else {
-	cbv->buffstrt = buff;
-	cbv->bufflen  = br;
+	cbv->buffstrt = buffer;
+	cbv->bufflen  = br + leftover;
       }
 
-      ret = XML_ParseBuffer(parser, br, done);
+      ret = XML_Parse(parser, buff, br, done);
 
       if (! ret)
 	break;
@@ -479,7 +502,7 @@ parse_local(CallbackVector *cbv, const char *str, int len)
       if ((dflags & INST_INDT) && len == 9 && strnEQ(str, "<!DOCTYPE", len)) {
 	cbv->local_parse_state = PS_Docname;
 	cbv->dtb_limit = DTB_GROW;
-	New(0, cbv->doctype_buffer, cbv->dtb_limit, char);
+	New(319, cbv->doctype_buffer, cbv->dtb_limit, char);
 	cbv->dtb_len = len;
 	strncpy(cbv->doctype_buffer, str, len);
 	check_and_set_default_handler(cbv->p, cbv, 0, INST_XML);
@@ -1050,6 +1073,18 @@ startElement(void *userData, const char *name, const char **atts)
 	  attname = (do_ns ? gen_ns_name(*atts, *pnstab, *pnslst)
 		     : newSVpv((char *) *atts, 0));
 	    
+	  if ((*atts)[-1] & 4) {
+	    /* This attribute was defaulted */
+	    
+	    if (SvIOKp(attname)) {
+	      SvIVX(attname) |= AttDefaultFlag;
+	    }
+	    else {
+	      sv_setiv(attname, (IV) AttDefaultFlag);
+	      SvPOK_on(attname);
+	    }
+	  }
+
 	  atts++;
 	  XPUSHs(sv_2mortal(attname));
 	  if (*atts)
@@ -1066,6 +1101,16 @@ startElement(void *userData, const char *name, const char **atts)
     }
   else
     SvREFCNT_dec(elname);
+
+  if (cbv->st_serial_stackptr >= cbv->st_serial_stacksize) {
+    unsigned int newsize = cbv->st_serial_stacksize + 512;
+
+    Renew(cbv->st_serial_stack, newsize, unsigned int);
+    cbv->st_serial_stacksize = newsize;
+  }
+
+  cbv->st_serial_stack[++cbv->st_serial_stackptr] =  ++(cbv->st_serial);
+  
 } /* End startElement */
 
 static void
@@ -1083,14 +1128,22 @@ endElement(void *userData, const char *name)
   else
     elname = newSVpv((char *) name, 0);
   
+  if (! cbv->st_serial_stackptr) {
+    croak("endElement: Start tag serial number stack underflow");
+  }
+
+  cbv->st_serial_stackptr--;
+
   if (SvTRUE(cbv->end_sv))
     {
       PUSHMARK(sp);
       XPUSHs(cbv->self_sv);
-      XPUSHs(sv_2mortal(elname));
+      XPUSHs(elname);
       PUTBACK;
       perl_call_sv(cbv->end_sv, G_DISCARD);
     }
+
+  SvREFCNT_dec(elname);
 }  /* End endElement */
 
 static void
@@ -1500,8 +1553,14 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 	  char *enc = (char *) (SvTRUE(enc_sv) ? SvPV(enc_sv,PL_na) : 0);
 	  SV ** noexp;
 
-	  Newz(0, cbv, 1, CallbackVector);
+	  if (! AttDefaultFlag) {
+	    SV * adf = perl_get_sv("XML::Parser::Expat::Attdef_Flag", 0);
+	    AttDefaultFlag = SvIV(adf);
+	  }
+
+	  Newz(320, cbv, 1, CallbackVector);
 	  cbv->self_sv = SvREFCNT_inc(self_sv);
+	  Newz(325, cbv->st_serial_stack, 1024, unsigned int);
 	  noexp = hv_fetch((HV*)SvRV(cbv->self_sv), "NoExpand", 8, 0);
 	  if (noexp && SvTRUE(*noexp))
 	    cbv->no_expand = 1;
@@ -1526,14 +1585,84 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 	RETVAL
 
 void
+XML_ParserRelease(parser)
+      XML_Parser parser
+    CODE:
+      {
+        CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+
+	SvREFCNT_dec(cbv->self_sv);
+      }
+
+void
 XML_ParserFree(parser)
 	XML_Parser parser
     CODE:
 	{
 	  CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 
+	  Safefree(cbv->st_serial_stack);
+
 	  if (cbv->doctype_buffer)
 	    Safefree(cbv->doctype_buffer);
+
+	  /* Clean up any SVs that we have */
+	  /* (Note that self_sv must already be taken care of
+	     or we couldn't be here */
+
+	  if (cbv->recstring && SvREFCNT(cbv->recstring))
+	    SvREFCNT_dec(cbv->recstring);
+
+	  if (cbv->start_sv)
+	    SvREFCNT_dec(cbv->start_sv);
+
+	  if (cbv->end_sv)
+	    SvREFCNT_dec(cbv->end_sv);
+
+	  if (cbv->char_sv)
+	    SvREFCNT_dec(cbv->char_sv);
+
+	  if (cbv->proc_sv)
+	    SvREFCNT_dec(cbv->proc_sv);
+
+	  if (cbv->cmnt_sv)
+	    SvREFCNT_dec(cbv->cmnt_sv);
+
+	  if (cbv->dflt_sv)
+	    SvREFCNT_dec(cbv->dflt_sv);
+
+	  if (cbv->entdcl_sv)
+	    SvREFCNT_dec(cbv->entdcl_sv);
+
+	  if (cbv->eledcl_sv)
+	    SvREFCNT_dec(cbv->eledcl_sv);
+
+	  if (cbv->attdcl_sv)
+	    SvREFCNT_dec(cbv->attdcl_sv);
+
+	  if (cbv->doctyp_sv)
+	    SvREFCNT_dec(cbv->doctyp_sv);
+
+	  if (cbv->xmldec_sv)
+	    SvREFCNT_dec(cbv->xmldec_sv);
+
+	  if (cbv->unprsd_sv)
+	    SvREFCNT_dec(cbv->unprsd_sv);
+
+	  if (cbv->notation_sv)
+	    SvREFCNT_dec(cbv->notation_sv);
+
+	  if (cbv->extent_sv)
+	    SvREFCNT_dec(cbv->extent_sv);
+
+	  if (cbv->startcd_sv)
+	    SvREFCNT_dec(cbv->startcd_sv);
+
+	  if (cbv->endcd_sv)
+	    SvREFCNT_dec(cbv->endcd_sv);
+
+	  /* ================ */
+	    
 	  Safefree(cbv);
 	  XML_ParserFree(parser);
 	}
@@ -1913,7 +2042,7 @@ GenerateNSName(name, namespace, table, list)
 	  nsstr = SvPV(namespace, nslen);
 
 	  /* Form a namespace-name string that looks like expat's */
-	  New(0, buff, nmlen + nslen + 2, char);
+	  New(321, buff, nmlen + nslen + 2, char);
 	  bp = buff;
 	  blim = bp + nslen;
 	  while (bp < blim)
@@ -1964,7 +2093,10 @@ XML_RecognizedString(parser)
 			       cbv->dtb_len - cbv->dtb_offset);
 	  }
 	  else {
-	    cbv->recstring = 0;
+	    if (cbv->recstring) {
+	      SvREFCNT_dec(cbv->recstring);
+	      cbv->recstring = 0;
+	    }
 
 	    if (cbv->no_expand)
 	      XML_SetDefaultHandler(parser, recString);
@@ -2054,7 +2186,7 @@ XML_LoadEncoding(data, size)
 
 	      RETVAL = mynewSVpv(emh->name, namelen);
 
-	      New(0, entry, 1, Encinfo);
+	      New(322, entry, 1, Encinfo);
 	      entry->prefixes_size = pfxsize;
 	      entry->bytemap_size  = bmsize;
 	      for (i = 0; i < 256; i++) {
@@ -2065,8 +2197,8 @@ XML_LoadEncoding(data, size)
 	      bm = (unsigned short *) (((char *) pfx)
 				       + sizeof(PrefixMap) * pfxsize);
 
-	      New(0, entry->prefixes, pfxsize, PrefixMap);
-	      New(0, entry->bytemap, bmsize, unsigned short);
+	      New(323, entry->prefixes, pfxsize, PrefixMap);
+	      New(324, entry->bytemap, bmsize, unsigned short);
 
 	      for (i = 0; i < pfxsize; i++, pfx++) {
 		PrefixMap *dest = &entry->prefixes[i];
@@ -2189,3 +2321,44 @@ XML_SetEndCdataHandler(parser, endcd_sv)
 
 	  XML_SetCdataSectionHandler(parser, scdhndl, ecdhndl);
 	}
+
+void
+XML_UnsetAllHandlers(parser)
+	XML_Parser			parser
+    CODE:
+	{
+	  XML_SetElementHandler(parser,
+				(XML_StartElementHandler) 0,
+				(XML_EndElementHandler) 0);
+	  XML_SetCharacterDataHandler(parser,
+				      (XML_CharacterDataHandler) 0);
+	  XML_SetProcessingInstructionHandler(parser,
+					      (XML_ProcessingInstructionHandler) 0);
+	  XML_SetCommentHandler(parser,
+				(XML_CommentHandler) 0);
+	  XML_SetCdataSectionHandler(parser,
+				     (XML_StartCdataSectionHandler) 0,
+				     (XML_EndCdataSectionHandler) 0);
+	  XML_SetDefaultHandler(parser,
+				(XML_DefaultHandler) 0);
+	  XML_SetUnparsedEntityDeclHandler(parser,
+					    (XML_UnparsedEntityDeclHandler) 0);
+	  XML_SetNotationDeclHandler(parser,
+				     (XML_NotationDeclHandler) 0);
+	  XML_SetExternalEntityRefHandler(parser,
+					  (XML_ExternalEntityRefHandler) 0);
+	  XML_SetUnknownEncodingHandler(parser,
+					(XML_UnknownEncodingHandler) 0,
+					(void *) 0);
+	}
+
+int
+XML_ElementIndex(parser)
+        XML_Parser                      parser
+    CODE:
+        {
+          CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+          RETVAL = cbv->st_serial_stack[cbv->st_serial_stackptr];
+        }
+    OUTPUT:
+        RETVAL

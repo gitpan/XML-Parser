@@ -72,6 +72,10 @@ typedef char ICHAR;
 
 #define EXPAND_SPARE 24
 
+/* On macintosh, '\n' may get translated to 0xD instead of 0xA */
+#define CR '\015'
+#define LF '\012'
+
 typedef struct binding {
   struct prefix *prefix;
   struct binding *nextTagBinding;
@@ -1020,7 +1024,7 @@ doContent(XML_Parser parser,
       }
       *eventEndPP = end;
       if (characterDataHandler) {
-	XML_Char c = XML_T('\n');
+	XML_Char c = XML_T(LF);
 	characterDataHandler(handlerArg, &c, 1);
       }
       else if (defaultHandler)
@@ -1175,6 +1179,7 @@ doContent(XML_Parser parser,
 	}
 	++tagLevel;
 	if (startElementHandler) {
+	  int i;
 	  enum XML_Error result;
 	  XML_Char *toPtr;
 	  for (;;) {
@@ -1204,6 +1209,12 @@ doContent(XML_Parser parser,
 	  if (result)
 	    return result;
 	  startElementHandler(handlerArg, tag->name, (const XML_Char **)atts);
+	  for (i = 0; i < attsSize; i += 2) {
+	    if (! ((XML_Char **) atts)[i])
+	      break;
+
+	    (((XML_Char **) atts)[i])[-1] = 0;
+	  }
 	  poolClear(&tempPool);
 	}
 	else {
@@ -1235,8 +1246,16 @@ doContent(XML_Parser parser,
 	if (result)
 	  return result;
 	poolFinish(&tempPool);
-	if (startElementHandler)
+	if (startElementHandler) {
+	  int i;
 	  startElementHandler(handlerArg, name, (const XML_Char **)atts);
+	  for (i = 0; i < attsSize; i += 2) {
+	    if (! ((XML_Char **) atts)[i])
+	      break;
+
+	    (((XML_Char **) atts)[i])[-1] = 0;
+	  }
+	}
 	if (endElementHandler) {
 	  if (startElementHandler)
 	    *eventPP = *eventEndPP;
@@ -1306,7 +1325,7 @@ doContent(XML_Parser parser,
       return XML_ERROR_MISPLACED_XML_PI;
     case XML_TOK_DATA_NEWLINE:
       if (characterDataHandler) {
-	XML_Char c = XML_T('\n');
+	XML_Char c = XML_T(LF);
 	characterDataHandler(handlerArg, &c, 1);
       }
       else if (defaultHandler)
@@ -1520,14 +1539,14 @@ static enum XML_Error storeAtts(XML_Parser parser, const ENCODING *enc,
 	      return XML_ERROR_NO_MEMORY;
 	  }
           else {
-	    (da->id->name)[-1] = 2;
+	    (da->id->name)[-1] = 6;
 	    nPrefixes++;
   	    appAtts[attIndex++] = da->id->name;
 	    appAtts[attIndex++] = da->value;
 	  }
 	}
 	else {
-	  (da->id->name)[-1] = 1;
+	  (da->id->name)[-1] = 5;
 	  appAtts[attIndex++] = da->id->name;
 	  appAtts[attIndex++] = da->value;
 	}
@@ -1538,7 +1557,7 @@ static enum XML_Error storeAtts(XML_Parser parser, const ENCODING *enc,
   i = 0;
   if (nPrefixes) {
     for (; i < attIndex; i += 2) {
-      if (appAtts[i][-1] == 2) {
+      if ((appAtts[i][-1] & 3) == 2) {
         ATTRIBUTE_ID *id;
         ((XML_Char *)(appAtts[i]))[-1] = 0;
 	id = (ATTRIBUTE_ID *)lookup(&dtd.attributeIds, appAtts[i], 0);
@@ -1566,10 +1585,11 @@ static enum XML_Error storeAtts(XML_Parser parser, const ENCODING *enc,
 	((XML_Char *)(appAtts[i]))[-1] = 0;
     }
   }
-  for (; i < attIndex; i += 2)
-    ((XML_Char *)(appAtts[i]))[-1] = 0;
-  if (!tagNamePtr)
+  if (!tagNamePtr) {
+    for (; i < attIndex; i += 2)
+      ((XML_Char *)(appAtts[i]))[-1] = 0;
     return XML_ERROR_NONE;
+  }
   for (binding = *bindingsPtr; binding; binding = binding->nextTagBinding)
     binding->attId->name[-1] = 0;
   if (elementType->prefix) {
@@ -1702,7 +1722,7 @@ enum XML_Error doCdataSection(XML_Parser parser,
       return XML_ERROR_NONE;
     case XML_TOK_DATA_NEWLINE:
       if (characterDataHandler) {
-	XML_Char c = XML_T('\n');
+	XML_Char c = XML_T(LF);
 	characterDataHandler(handlerArg, &c, 1);
       }
       else if (defaultHandler)
@@ -2428,7 +2448,7 @@ enum XML_Error storeEntityValue(XML_Parser parser,
     case XML_TOK_DATA_NEWLINE:
       if (pool->end == pool->ptr && !poolGrow(pool))
 	return XML_ERROR_NO_MEMORY;
-      *(pool->ptr)++ = XML_T('\n');
+      *(pool->ptr)++ = XML_T(LF);
       break;
     case XML_TOK_CHAR_REF:
       {
@@ -2472,14 +2492,14 @@ normalizeLines(XML_Char *s)
   for (;; s++) {
     if (*s == XML_T('\0'))
       return;
-    if (*s == XML_T('\r'))
+    if (*s == XML_T(CR))
       break;
   }
   p = s;
   do {
-    if (*s == XML_T('\r')) {
-      *p++ = XML_T('\n');
-      if (*++s == XML_T('\n'))
+    if (*s == XML_T(CR)) {
+      *p++ = XML_T(LF);
+      if (*++s == XML_T(LF))
         s++;
     }
     else
@@ -2807,8 +2827,8 @@ void normalizePublicId(XML_Char *publicId)
   for (s = publicId; *s; s++) {
     switch (*s) {
     case XML_T(' '):
-    case XML_T('\r'):
-    case XML_T('\n'):
+    case XML_T(CR):
+    case XML_T(LF):
       if (p != publicId && p[-1] != XML_T(' '))
 	*p++ = XML_T(' ');
       break;
