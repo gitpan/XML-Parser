@@ -1,4 +1,4 @@
-BEGIN {print "1..29\n";}
+BEGIN {print "1..30\n";}
 END {print "not ok 1\n" unless $loaded;}
 use XML::Parser;
 $loaded = 1;
@@ -36,7 +36,8 @@ my $docstr =<<"End_of_Doc;";
    <!ATTLIST junk
          id ID #REQUIRED
          version CDATA #FIXED '1.0'
-         color (red|green|blue) 'green'>
+         color (red|green|blue) 'green'
+         foo NOTATION (x|y|z) #IMPLIED>
    <!ENTITY skunk "stinky animal">
    <!ENTITY big "$bigval">
    <!-- a comment -->
@@ -63,7 +64,8 @@ sub enth1 {
 		    and $notation eq 'gif');
 }
 
-my $parser = new XML::Parser(ErrorContext => 2,
+my $parser = new XML::Parser(ErrorContext  => 2,
+			     NoLWP         => 1,
 			     ParseParamEnt => 1,
 			     Handlers => {Entity => \&enth1});
 
@@ -131,6 +133,8 @@ sub att {
 		     and $default eq "'green'");
     $tests[27]++ if ($elname eq 'bar' and $attname eq 'big' and $default eq
 		     "'$bigval'");
+    $tests[28]++ if ($elname eq 'junk' and $attname eq 'foo' and $default eq
+		     '#IMPLIED');
 }
     
 sub xd {
@@ -138,11 +142,11 @@ sub xd {
 
     if (defined($version)) {
       if ($version eq '1.0' and $enc eq 'ISO-8859-1' and not defined($stand)) {
-	$tests[28]++;
+	$tests[29]++;
       }
     }
     else {
-      $tests[29]++ if $enc eq 'x-sjis-unicode';
+      $tests[30]++ if $enc eq 'x-sjis-unicode';
     }
 }
 
@@ -155,7 +159,7 @@ $parser->setHandlers(Entity  => \&enth2,
 $| = 1;
 $parser->parse($docstr);
 
-for (2 .. 29) {
+for (2 .. 30) {
     print "not " unless $tests[$_];
     print "ok $_\n";
 }

@@ -12,7 +12,7 @@ use IO::Handle;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.28" ;
+$VERSION = "2.29" ;
 
 $have_File_Spec = $INC{'File/Spec.pm'} || do 'File/Spec.pm';
 
@@ -198,12 +198,10 @@ sub current_byte {
 
 sub base {
   my ($self, $newbase) = @_;
-  if ($self->{_State_} == 1) {
-    my $p = $self->{Parser};
-    my $oldbase = GetBase($p);
-    SetBase($p, $newbase) if @_ > 1;
-    return $oldbase;
-  }
+  my $p = $self->{Parser};
+  my $oldbase = GetBase($p);
+  SetBase($p, $newbase) if @_ > 1;
+  return $oldbase;
 }
 
 sub context {
@@ -607,6 +605,7 @@ sub parsefile {
 sub parse_more {
   my ($self, $data) = @_;
 
+  $self->{_State_} = 1;
   my $ret = XML::Parser::Expat::ParsePartial($self->{Parser}, $data);
 
   croak $self->{ErrorMessage} unless $ret;
@@ -866,7 +865,7 @@ This is called after an external entity has been parsed. It allows
 applications to perform cleanup on actions performed in the above
 ExternEnt handler.
 
-=item * Entity			(Parser, Name, Val, Sysid, Pubid, Ndata)
+=item * Entity			(Parser, Name, Val, Sysid, Pubid, Ndata, IsParam)
 
 This is called when an entity is declared. For internal entities, the Val
 parameter will contain the value and the remaining three parameters will
@@ -874,8 +873,8 @@ be undefined. For external entities, the Val parameter
 will be undefined, the Sysid parameter will have the system id, the Pubid
 parameter will have the public id if it was provided (it will be undefined
 otherwise), the Ndata parameter will contain the notation for unparsed
-entities. If this is a parameter entity declaration, then a '%' will be
-prefixed to the name.
+entities. If this is a parameter entity declaration, then the IsParam
+parameter is true.
 
 Note that this handler and the Unparsed handler above overlap. If both are
 set, then this handler will not be called for unparsed entities.

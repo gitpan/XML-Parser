@@ -131,6 +131,7 @@ newSVpvn(char *s, STRLEN len)
   return sv;
 }  /* End newSVpvn */
 
+#define ERRSV GvSV(errgv)
 #endif
 
 #ifdef SvUTF8_on
@@ -1114,7 +1115,7 @@ unknownEncoding(void *unused, const char *name, XML_Encoding *info)
     ENTER;
     SAVETMPS;
     PUSHMARK(sp);
-    XPUSHs(sv_2mortal(newUTF8SVpvn(buff,namelen)));
+    XPUSHs(sv_2mortal(newSVpvn(buff,namelen)));
     PUTBACK;
     perl_call_pv("XML::Parser::Expat::load_encoding", G_DISCARD);
     

@@ -1,11 +1,37 @@
+Index: xmlparse/hashtable.c
+===================================================================
+RCS file: /home/ccc/CVS/expat/xmlparse/hashtable.c,v
+retrieving revision 1.1.1.1
+retrieving revision 1.2
+diff -c -r1.1.1.1 -r1.2
+*** hashtable.c	1999/12/12 18:40:41	1.1.1.1
+--- hashtable.c	2000/05/17 20:01:34	1.2
+***************
+*** 122,128 ****
+      if (p)
+        free(p);
+    }
+!   free(table->v);
+  }
+  
+  void hashTableInit(HASH_TABLE *p)
+--- 122,129 ----
+      if (p)
+        free(p);
+    }
+!   if (table->v)
+!     free(table->v);
+  }
+  
+  void hashTableInit(HASH_TABLE *p)
 Index: xmlparse/xmlparse.c
 ===================================================================
 RCS file: /home/ccc/CVS/expat/xmlparse/xmlparse.c,v
 retrieving revision 1.1.1.2
-retrieving revision 1.10
-diff -c -r1.1.1.2 -r1.10
+retrieving revision 1.14
+diff -c -r1.1.1.2 -r1.14
 *** xmlparse.c	1999/12/12 18:43:14	1.1.1.2
---- xmlparse.c	2000/03/26 15:35:33	1.10
+--- xmlparse.c	2000/05/21 00:24:17	1.14
 ***************
 *** 17,22 ****
 --- 17,25 ----
@@ -59,7 +85,7 @@ diff -c -r1.1.1.2 -r1.10
   typedef struct open_internal_entity {
 ***************
 *** 262,269 ****
---- 284,298 ----
+--- 284,299 ----
   static XML_Char *poolStoreString(STRING_POOL *pool, const ENCODING *enc,
   				  const char *ptr, const char *end);
   static int poolGrow(STRING_POOL *pool);
@@ -68,6 +94,7 @@ diff -c -r1.1.1.2 -r1.10
 + 
   static const XML_Char *poolCopyString(STRING_POOL *pool, const XML_Char *s);
   static const XML_Char *poolCopyStringN(STRING_POOL *pool, const XML_Char *s, int n);
++ static const XML_Char *poolAppendString(STRING_POOL *pool, const XML_Char *s);
 + static ELEMENT_TYPE * getElementType(XML_Parser Paraser,
 + 				     const ENCODING *enc,
 + 				     const char *ptr,
@@ -77,7 +104,7 @@ diff -c -r1.1.1.2 -r1.10
   #define poolEnd(pool) ((pool)->ptr)
 ***************
 *** 310,315 ****
---- 339,348 ----
+--- 340,349 ----
     XML_ExternalEntityRefHandler m_externalEntityRefHandler;
     void *m_externalEntityRefHandlerArg;
     XML_UnknownEncodingHandler m_unknownEncodingHandler;
@@ -90,7 +117,7 @@ diff -c -r1.1.1.2 -r1.10
     const ENCODING *m_internalEncoding;
 ***************
 *** 329,334 ****
---- 362,371 ----
+--- 363,372 ----
     int m_defaultExpandInternalEntities;
     int m_tagLevel;
     ENTITY *m_declEntity;
@@ -103,7 +130,7 @@ diff -c -r1.1.1.2 -r1.10
     ELEMENT_TYPE *m_declElementType;
 ***************
 *** 376,381 ****
---- 413,422 ----
+--- 414,423 ----
   #define externalEntityRefHandler (((Parser *)parser)->m_externalEntityRefHandler)
   #define externalEntityRefHandlerArg (((Parser *)parser)->m_externalEntityRefHandlerArg)
   #define unknownEncodingHandler (((Parser *)parser)->m_unknownEncodingHandler)
@@ -116,7 +143,7 @@ diff -c -r1.1.1.2 -r1.10
   #define internalEncoding (((Parser *)parser)->m_internalEncoding)
 ***************
 *** 407,412 ****
---- 448,457 ----
+--- 449,458 ----
   #define dtd (((Parser *)parser)->m_dtd)
   #define curBase (((Parser *)parser)->m_curBase)
   #define declEntity (((Parser *)parser)->m_declEntity)
@@ -129,7 +156,7 @@ diff -c -r1.1.1.2 -r1.10
   #define declElementType (((Parser *)parser)->m_declElementType)
 ***************
 *** 466,471 ****
---- 511,520 ----
+--- 512,521 ----
     externalEntityRefHandler = 0;
     externalEntityRefHandlerArg = parser;
     unknownEncodingHandler = 0;
@@ -142,7 +169,7 @@ diff -c -r1.1.1.2 -r1.10
     bufferEnd = 0;
 ***************
 *** 475,480 ****
---- 524,533 ----
+--- 525,534 ----
     declElementType = 0;
     declAttributeId = 0;
     declEntity = 0;
@@ -154,8 +181,15 @@ diff -c -r1.1.1.2 -r1.10
     declNotationPublicId = 0;
     memset(&position, 0, sizeof(POSITION));
 ***************
-*** 581,586 ****
---- 634,644 ----
+*** 576,586 ****
+--- 630,647 ----
+    XML_StartCdataSectionHandler oldStartCdataSectionHandler = startCdataSectionHandler;
+    XML_EndCdataSectionHandler oldEndCdataSectionHandler = endCdataSectionHandler;
+    XML_DefaultHandler oldDefaultHandler = defaultHandler;
++   XML_UnparsedEntityDeclHandler oldUnparsedEntityDeclHandler = unparsedEntityDeclHandler;
++   XML_NotationDeclHandler oldNotationDeclHandler = notationDeclHandler;
+    XML_StartNamespaceDeclHandler oldStartNamespaceDeclHandler = startNamespaceDeclHandler;
+    XML_EndNamespaceDeclHandler oldEndNamespaceDeclHandler = endNamespaceDeclHandler;
     XML_NotStandaloneHandler oldNotStandaloneHandler = notStandaloneHandler;
     XML_ExternalEntityRefHandler oldExternalEntityRefHandler = externalEntityRefHandler;
     XML_UnknownEncodingHandler oldUnknownEncodingHandler = unknownEncodingHandler;
@@ -168,8 +202,15 @@ diff -c -r1.1.1.2 -r1.10
     void *oldHandlerArg = handlerArg;
     int oldDefaultExpandInternalEntities = defaultExpandInternalEntities;
 ***************
-*** 606,611 ****
---- 664,674 ----
+*** 601,611 ****
+--- 662,679 ----
+    startCdataSectionHandler = oldStartCdataSectionHandler;
+    endCdataSectionHandler = oldEndCdataSectionHandler;
+    defaultHandler = oldDefaultHandler;
++   unparsedEntityDeclHandler = oldUnparsedEntityDeclHandler;
++   notationDeclHandler = oldNotationDeclHandler;
+    startNamespaceDeclHandler = oldStartNamespaceDeclHandler;
+    endNamespaceDeclHandler = oldEndNamespaceDeclHandler;
     notStandaloneHandler = oldNotStandaloneHandler;
     externalEntityRefHandler = oldExternalEntityRefHandler;
     unknownEncodingHandler = oldUnknownEncodingHandler;
@@ -198,7 +239,7 @@ diff -c -r1.1.1.2 -r1.10
   void XML_UseParserAsHandlerArg(XML_Parser parser)
   {
     handlerArg = parser;
---- 741,763 ----
+--- 746,768 ----
   #endif /* XML_DTD */
     dtdDestroy(&dtd);
     free((void *)atts);
@@ -224,7 +265,7 @@ diff -c -r1.1.1.2 -r1.10
     handlerArg = parser;
 ***************
 *** 731,736 ****
---- 802,817 ----
+--- 807,822 ----
     endElementHandler = end;
   }
   
@@ -243,7 +284,7 @@ diff -c -r1.1.1.2 -r1.10
   {
 ***************
 *** 757,762 ****
---- 838,853 ----
+--- 843,858 ----
     endCdataSectionHandler = end;
   }
   
@@ -262,7 +303,7 @@ diff -c -r1.1.1.2 -r1.10
   {
 ***************
 *** 779,784 ****
---- 870,885 ----
+--- 875,890 ----
     endDoctypeDeclHandler = end;
   }
   
@@ -281,7 +322,7 @@ diff -c -r1.1.1.2 -r1.10
   {
 ***************
 *** 799,804 ****
---- 900,914 ----
+--- 905,919 ----
     endNamespaceDeclHandler = end;
   }
   
@@ -299,7 +340,7 @@ diff -c -r1.1.1.2 -r1.10
   {
 ***************
 *** 827,832 ****
---- 937,965 ----
+--- 942,970 ----
     unknownEncodingHandlerData = data;
   }
   
@@ -331,7 +372,7 @@ diff -c -r1.1.1.2 -r1.10
   {
 ***************
 *** 851,856 ****
---- 984,990 ----
+--- 989,995 ----
       processor = errorProcessor;
       return 0;
     }
@@ -341,7 +382,7 @@ diff -c -r1.1.1.2 -r1.10
       int nLeftOver;
 ***************
 *** 891,896 ****
---- 1025,1031 ----
+--- 1030,1036 ----
       }
       return 1;
     }
@@ -351,7 +392,7 @@ diff -c -r1.1.1.2 -r1.10
       return XML_ParseBuffer(parser, len, isFinal);
 ***************
 *** 922,931 ****
---- 1057,1082 ----
+--- 1062,1087 ----
     if (len > bufferLim - bufferEnd) {
       /* FIXME avoid integer overflow */
       int neededSize = len + (bufferEnd - bufferPtr);
@@ -380,7 +421,7 @@ diff -c -r1.1.1.2 -r1.10
         char *newBuf;
 ***************
 *** 941,952 ****
---- 1092,1120 ----
+--- 1097,1125 ----
   	return 0;
         }
         bufferLim = newBuf + bufferSize;
@@ -412,7 +453,7 @@ diff -c -r1.1.1.2 -r1.10
     return bufferEnd;
 ***************
 *** 971,976 ****
---- 1139,1156 ----
+--- 1144,1161 ----
     return 0;
   }
   
@@ -441,7 +482,7 @@ diff -c -r1.1.1.2 -r1.10
     int standalone = -1;
     if (!(ns
           ? XmlParseXmlDeclNS
---- 2226,2236 ----
+--- 2231,2241 ----
   	       const char *s, const char *next)
   {
     const char *encodingName = 0;
@@ -455,7 +496,7 @@ diff -c -r1.1.1.2 -r1.10
           ? XmlParseXmlDeclNS
 ***************
 *** 2057,2062 ****
---- 2240,2246 ----
+--- 2245,2251 ----
   		           next,
   		           &eventPtr,
   		           &version,
@@ -472,7 +513,7 @@ diff -c -r1.1.1.2 -r1.10
       reportDefault(parser, encoding, s, next);
     if (!protocolEncodingName) {
       if (newEncoding) {
---- 2252,2279 ----
+--- 2257,2284 ----
         paramEntityParsing = XML_PARAM_ENTITY_PARSING_NEVER;
   #endif /* XML_DTD */
     }
@@ -523,7 +564,7 @@ diff -c -r1.1.1.2 -r1.10
     return XML_ERROR_NONE;
   }
   
---- 2285,2310 ----
+--- 2290,2315 ----
       }
       else if (encodingName) {
         enum XML_Error result;
@@ -552,7 +593,7 @@ diff -c -r1.1.1.2 -r1.10
   
 ***************
 *** 2174,2179 ****
---- 2385,2392 ----
+--- 2390,2397 ----
   
     const char **eventPP;
     const char **eventEndPP;
@@ -573,7 +614,7 @@ diff -c -r1.1.1.2 -r1.10
   	poolClear(&tempPool);
         }
         break;
---- 2443,2461 ----
+--- 2448,2466 ----
         break;
       case XML_ROLE_DOCTYPE_NAME:
         if (startDoctypeDeclHandler) {
@@ -595,7 +636,7 @@ diff -c -r1.1.1.2 -r1.10
         break;
 ***************
 *** 2248,2253 ****
---- 2470,2481 ----
+--- 2475,2486 ----
         break;
   #endif /* XML_DTD */
       case XML_ROLE_DOCTYPE_PUBLIC_ID:
@@ -610,7 +651,7 @@ diff -c -r1.1.1.2 -r1.10
   				    externalSubsetName,
 ***************
 *** 2272,2277 ****
---- 2500,2510 ----
+--- 2505,2515 ----
         }
         break;
       case XML_ROLE_DOCTYPE_CLOSE:
@@ -660,7 +701,7 @@ diff -c -r1.1.1.2 -r1.10
         break;
       case XML_ROLE_DEFAULT_ATTRIBUTE_VALUE:
       case XML_ROLE_FIXED_ATTRIBUTE_VALUE:
---- 2533,2602 ----
+--- 2538,2618 ----
         processor = contentProcessor;
         return contentProcessor(parser, s, end, nextPtr);
       case XML_ROLE_ATTLIST_ELEMENT_NAME:
@@ -690,19 +731,28 @@ diff -c -r1.1.1.2 -r1.10
 +       break;
 +     case XML_ROLE_ATTRIBUTE_TYPE_ENTITIES:
 +       declAttributeType = "ENTITIES";
-+       break;
+        break;
 +     case XML_ROLE_ATTRIBUTE_TYPE_NMTOKEN:
 +       declAttributeType = "NMTOKEN";
 +       break;
 +     case XML_ROLE_ATTRIBUTE_TYPE_NMTOKENS:
 +       declAttributeType = "NMTOKENS";
-        break;
++       break;
 + 
 +     case XML_ROLE_ATTRIBUTE_ENUM_VALUE:
++     case XML_ROLE_ATTRIBUTE_NOTATION_VALUE:
 +       if (attlistDeclHandler)
 +       {
-+ 	char prefix = declAttributeType ? '|' : '(';
-+ 	if (! poolAppendChar(&tempPool, prefix))
++ 	char *prefix;
++ 	if (declAttributeType) {
++ 	  prefix = "|";
++ 	}
++ 	else {
++ 	  prefix = (role == XML_ROLE_ATTRIBUTE_NOTATION_VALUE
++ 		    ? "NOTATION("
++ 		    : "(");
++ 	}
++ 	if (! poolAppendString(&tempPool, prefix))
 + 	  return XML_ERROR_NO_MEMORY;
 + 	if (! poolAppend(&tempPool, enc, s, next))
 + 	  return XML_ERROR_NO_MEMORY;
@@ -715,7 +765,9 @@ diff -c -r1.1.1.2 -r1.10
   	  && !defineAttribute(declElementType, declAttributeId, declAttributeIsCdata, 0))
   	return XML_ERROR_NO_MEMORY;
 +       if (attlistDeclHandler && declAttributeType) {
-+ 	if (*declAttributeType == '(') {
++ 	if (*declAttributeType == '('
++ 	    || *declAttributeType == 'N' && declAttributeType[1] == 'O') {
++ 	  /* Enumerated or Notation type */
 + 	  if (! poolAppendChar(&tempPool, ')')
 + 	      || ! poolAppendChar(&tempPool, '\0'))
 + 	    return XML_ERROR_NO_MEMORY;
@@ -733,12 +785,14 @@ diff -c -r1.1.1.2 -r1.10
       case XML_ROLE_FIXED_ATTRIBUTE_VALUE:
 ***************
 *** 2347,2352 ****
---- 2614,2634 ----
+--- 2630,2652 ----
   	if (dtd.complete
   	    && !defineAttribute(declElementType, declAttributeId, declAttributeIsCdata, attVal))
   	  return XML_ERROR_NO_MEMORY;
 + 	if (attlistDeclHandler && declAttributeType) {
-+ 	  if (*declAttributeType == '(') {
++ 	  if (*declAttributeType == '('
++ 	      || *declAttributeType == 'N' && declAttributeType[1] == 'O') {
++ 	    /* Enumerated or Notation type */
 + 	    if (! poolAppendChar(&tempPool, ')')
 + 		|| ! poolAppendChar(&tempPool, '\0'))
 + 	      return XML_ERROR_NO_MEMORY;
@@ -757,7 +811,7 @@ diff -c -r1.1.1.2 -r1.10
       case XML_ROLE_ENTITY_VALUE:
 ***************
 *** 2358,2363 ****
---- 2640,2654 ----
+--- 2658,2672 ----
   	  declEntity->textPtr = poolStart(&dtd.pool);
   	  declEntity->textLen = poolLength(&dtd.pool);
   	  poolFinish(&dtd.pool);
@@ -775,7 +829,7 @@ diff -c -r1.1.1.2 -r1.10
   	  poolDiscard(&dtd.pool);
 ***************
 *** 2366,2371 ****
---- 2657,2668 ----
+--- 2675,2686 ----
         }
         break;
       case XML_ROLE_DOCTYPE_SYSTEM_ID:
@@ -790,7 +844,7 @@ diff -c -r1.1.1.2 -r1.10
   	  && !paramEntityParsing
 ***************
 *** 2381,2386 ****
---- 2678,2684 ----
+--- 2696,2702 ----
   	declEntity = (ENTITY *)lookup(&dtd.paramEntities,
   				      externalSubsetName,
   				      sizeof(ENTITY));
@@ -800,7 +854,7 @@ diff -c -r1.1.1.2 -r1.10
         }
 ***************
 *** 2397,2402 ****
---- 2695,2712 ----
+--- 2713,2730 ----
   	poolFinish(&dtd.pool);
         }
         break;
@@ -828,7 +882,7 @@ diff -c -r1.1.1.2 -r1.10
         }
         break;
       case XML_ROLE_GENERAL_ENTITY_NAME:
---- 2722,2737 ----
+--- 2740,2755 ----
   				    declEntity->publicId,
   				    declEntity->notation);
   	}
@@ -855,7 +909,7 @@ diff -c -r1.1.1.2 -r1.10
   	}
   	else {
   	  poolDiscard(&dtd.pool);
---- 2752,2762 ----
+--- 2770,2780 ----
   	    poolDiscard(&dtd.pool);
   	    declEntity = 0;
   	  }
@@ -877,7 +931,7 @@ diff -c -r1.1.1.2 -r1.10
         }
   #else /* not XML_DTD */
         declEntity = 0;
---- 2777,2787 ----
+--- 2795,2805 ----
   	  poolDiscard(&dtd.pool);
   	  declEntity = 0;
   	}
@@ -905,14 +959,14 @@ diff -c -r1.1.1.2 -r1.10
         break;
       case XML_ROLE_GROUP_SEQUENCE:
         if (groupConnector[prologState.level] == '|')
---- 2865,2889 ----
+--- 2883,2907 ----
   #endif /* XML_DTD */
       case XML_ROLE_GROUP_OPEN:
         if (prologState.level >= groupSize) {
 ! 	if (groupSize) {
   	  groupConnector = realloc(groupConnector, groupSize *= 2);
 + 	  if (dtd.scaffIndex)
-+ 	    dtd.scaffIndex = realloc(dtd.scaffIndex, groupSize);
++ 	    dtd.scaffIndex = realloc(dtd.scaffIndex, groupSize * sizeof(int));
 + 	}
   	else
   	  groupConnector = malloc(groupSize = 32);
@@ -920,7 +974,7 @@ diff -c -r1.1.1.2 -r1.10
   	  return XML_ERROR_NO_MEMORY;
         }
         groupConnector[prologState.level] = 0;
-+       if (declElementType) {
++       if (dtd.in_eldecl) {
 + 	int myindex = nextScaffoldPart(parser);
 + 	if (myindex < 0)
 + 	  return XML_ERROR_NO_MEMORY;
@@ -933,7 +987,7 @@ diff -c -r1.1.1.2 -r1.10
         if (groupConnector[prologState.level] == '|')
 ***************
 *** 2557,2562 ****
---- 2893,2904 ----
+--- 2911,2922 ----
       case XML_ROLE_GROUP_CHOICE:
         if (groupConnector[prologState.level] == ',')
   	return XML_ERROR_SYNTAX;
@@ -948,7 +1002,7 @@ diff -c -r1.1.1.2 -r1.10
       case XML_ROLE_PARAM_ENTITY_REF:
 ***************
 *** 2613,2618 ****
---- 2955,3060 ----
+--- 2973,3078 ----
         if (defaultHandler)
   	reportDefault(parser, enc, s, next);
         break;
@@ -1057,7 +1111,7 @@ diff -c -r1.1.1.2 -r1.10
         case XML_TOK_PI:
 ***************
 *** 3361,3366 ****
---- 3803,3817 ----
+--- 3821,3835 ----
   #endif /* XML_DTD */
     p->defaultPrefix.name = 0;
     p->defaultPrefix.binding = 0;
@@ -1075,7 +1129,7 @@ diff -c -r1.1.1.2 -r1.10
   
 ***************
 *** 3395,3400 ****
---- 3846,3855 ----
+--- 3864,3873 ----
     hashTableDestroy(&(p->attributeIds));
     hashTableDestroy(&(p->prefixes));
     poolDestroy(&(p->pool));
@@ -1088,7 +1142,7 @@ diff -c -r1.1.1.2 -r1.10
   /* Do a deep copy of the DTD.  Return 0 for out of memory; non-zero otherwise.
 ***************
 *** 3503,3508 ****
---- 3958,3972 ----
+--- 3976,3990 ----
   
     newDtd->complete = oldDtd->complete;
     newDtd->standalone = oldDtd->standalone;
@@ -1105,8 +1159,28 @@ diff -c -r1.1.1.2 -r1.10
   }
   
 ***************
+*** 3656,3661 ****
+--- 4138,4154 ----
+  }
+  
+  static
++ const XML_Char *poolAppendString(STRING_POOL *pool, const XML_Char *s)
++ {
++   while (*s) {
++     if (!poolAppendChar(pool, *s))
++       return 0;
++     s++;
++   } 
++   return pool->start;
++ }  /* End poolAppendString */
++ 
++ static
+  XML_Char *poolStoreString(STRING_POOL *pool, const ENCODING *enc,
+  			  const char *ptr, const char *end)
+  {
+***************
 *** 3722,3724 ****
---- 4186,4308 ----
+--- 4215,4339 ----
     }
     return 1;
   }
@@ -1118,7 +1192,9 @@ diff -c -r1.1.1.2 -r1.10
 +   int next;
 + 
 +   if (! dtd.scaffIndex) {
-+     dtd.scaffIndex = malloc(groupSize);
++     dtd.scaffIndex = malloc(groupSize * sizeof(int));
++     if (! dtd.scaffIndex)
++       return -1;
 +     dtd.scaffIndex[0] = 0;
 +   }
 + 

@@ -289,6 +289,7 @@ static XML_Content *build_model(XML_Parser parser);
 
 static const XML_Char *poolCopyString(STRING_POOL *pool, const XML_Char *s);
 static const XML_Char *poolCopyStringN(STRING_POOL *pool, const XML_Char *s, int n);
+static const XML_Char *poolAppendString(STRING_POOL *pool, const XML_Char *s);
 static ELEMENT_TYPE * getElementType(XML_Parser Paraser,
 				     const ENCODING *enc,
 				     const char *ptr,
@@ -629,6 +630,8 @@ XML_Parser XML_ExternalEntityParserCreate(XML_Parser oldParser,
   XML_StartCdataSectionHandler oldStartCdataSectionHandler = startCdataSectionHandler;
   XML_EndCdataSectionHandler oldEndCdataSectionHandler = endCdataSectionHandler;
   XML_DefaultHandler oldDefaultHandler = defaultHandler;
+  XML_UnparsedEntityDeclHandler oldUnparsedEntityDeclHandler = unparsedEntityDeclHandler;
+  XML_NotationDeclHandler oldNotationDeclHandler = notationDeclHandler;
   XML_StartNamespaceDeclHandler oldStartNamespaceDeclHandler = startNamespaceDeclHandler;
   XML_EndNamespaceDeclHandler oldEndNamespaceDeclHandler = endNamespaceDeclHandler;
   XML_NotStandaloneHandler oldNotStandaloneHandler = notStandaloneHandler;
@@ -659,6 +662,8 @@ XML_Parser XML_ExternalEntityParserCreate(XML_Parser oldParser,
   startCdataSectionHandler = oldStartCdataSectionHandler;
   endCdataSectionHandler = oldEndCdataSectionHandler;
   defaultHandler = oldDefaultHandler;
+  unparsedEntityDeclHandler = oldUnparsedEntityDeclHandler;
+  notationDeclHandler = oldNotationDeclHandler;
   startNamespaceDeclHandler = oldStartNamespaceDeclHandler;
   endNamespaceDeclHandler = oldEndNamespaceDeclHandler;
   notStandaloneHandler = oldNotStandaloneHandler;
@@ -2568,10 +2573,19 @@ doProlog(XML_Parser parser,
       break;
 
     case XML_ROLE_ATTRIBUTE_ENUM_VALUE:
+    case XML_ROLE_ATTRIBUTE_NOTATION_VALUE:
       if (attlistDeclHandler)
       {
-	char prefix = declAttributeType ? '|' : '(';
-	if (! poolAppendChar(&tempPool, prefix))
+	char *prefix;
+	if (declAttributeType) {
+	  prefix = "|";
+	}
+	else {
+	  prefix = (role == XML_ROLE_ATTRIBUTE_NOTATION_VALUE
+		    ? "NOTATION("
+		    : "(");
+	}
+	if (! poolAppendString(&tempPool, prefix))
 	  return XML_ERROR_NO_MEMORY;
 	if (! poolAppend(&tempPool, enc, s, next))
 	  return XML_ERROR_NO_MEMORY;
@@ -2584,7 +2598,9 @@ doProlog(XML_Parser parser,
 	  && !defineAttribute(declElementType, declAttributeId, declAttributeIsCdata, 0))
 	return XML_ERROR_NO_MEMORY;
       if (attlistDeclHandler && declAttributeType) {
-	if (*declAttributeType == '(') {
+	if (*declAttributeType == '('
+	    || *declAttributeType == 'N' && declAttributeType[1] == 'O') {
+	  /* Enumerated or Notation type */
 	  if (! poolAppendChar(&tempPool, ')')
 	      || ! poolAppendChar(&tempPool, '\0'))
 	    return XML_ERROR_NO_MEMORY;
@@ -2615,7 +2631,9 @@ doProlog(XML_Parser parser,
 	    && !defineAttribute(declElementType, declAttributeId, declAttributeIsCdata, attVal))
 	  return XML_ERROR_NO_MEMORY;
 	if (attlistDeclHandler && declAttributeType) {
-	  if (*declAttributeType == '(') {
+	  if (*declAttributeType == '('
+	      || *declAttributeType == 'N' && declAttributeType[1] == 'O') {
+	    /* Enumerated or Notation type */
 	    if (! poolAppendChar(&tempPool, ')')
 		|| ! poolAppendChar(&tempPool, '\0'))
 	      return XML_ERROR_NO_MEMORY;
@@ -2868,7 +2886,7 @@ doProlog(XML_Parser parser,
 	if (groupSize) {
 	  groupConnector = realloc(groupConnector, groupSize *= 2);
 	  if (dtd.scaffIndex)
-	    dtd.scaffIndex = realloc(dtd.scaffIndex, groupSize);
+	    dtd.scaffIndex = realloc(dtd.scaffIndex, groupSize * sizeof(int));
 	}
 	else
 	  groupConnector = malloc(groupSize = 32);
@@ -2876,7 +2894,7 @@ doProlog(XML_Parser parser,
 	  return XML_ERROR_NO_MEMORY;
       }
       groupConnector[prologState.level] = 0;
-      if (declElementType) {
+      if (dtd.in_eldecl) {
 	int myindex = nextScaffoldPart(parser);
 	if (myindex < 0)
 	  return XML_ERROR_NO_MEMORY;
@@ -4120,6 +4138,17 @@ static const XML_Char *poolCopyStringN(STRING_POOL *pool, const XML_Char *s, int
 }
 
 static
+const XML_Char *poolAppendString(STRING_POOL *pool, const XML_Char *s)
+{
+  while (*s) {
+    if (!poolAppendChar(pool, *s))
+      return 0;
+    s++;
+  } 
+  return pool->start;
+}  /* End poolAppendString */
+
+static
 XML_Char *poolStoreString(STRING_POOL *pool, const ENCODING *enc,
 			  const char *ptr, const char *end)
 {
@@ -4194,7 +4223,9 @@ nextScaffoldPart(XML_Parser parser)
   int next;
 
   if (! dtd.scaffIndex) {
-    dtd.scaffIndex = malloc(groupSize);
+    dtd.scaffIndex = malloc(groupSize * sizeof(int));
+    if (! dtd.scaffIndex)
+      return -1;
     dtd.scaffIndex[0] = 0;
   }
 

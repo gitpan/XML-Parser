@@ -28,6 +28,7 @@ Expat/expat/xmltok/xmltok_ns.c
 MANIFEST			This file
 Makefile.PL			perl MakeMaker script for XML::Parser
 Parser.pm			XML::Parser module
+Parser/LWPExternEnt.pl		LWP based external entity handler
 Parser/Encodings/Japanese_Encodings.msg	Message about Japanese encodings.
 Parser/Encodings/README		Info about encoding maps
 Parser/Encodings/big5.enc	Big5 binary encoding map

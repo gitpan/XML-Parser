@@ -22,7 +22,7 @@ $order = ($Config{byteorder} =~ /^12/) ? '12' : '21';
 
 $define .= "-DXML_BYTE_ORDER=$order ";
 
-$define .= ($Config{cc} =~ /cl\.exe/i) ? '/Fo$@' : '-o $@';
+$define .= ($Config{cc} =~ /cl(\.exe)?$/i) ? '/Fo$@' : '-o $@';
 
 @expat_files = qw(expat/xmltok/xmltok.c expat/xmltok/xmlrole.c
                   expat/xmlparse/xmlparse.c expat/xmlparse/hashtable.c);

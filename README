@@ -1,4 +1,4 @@
-			XML::Parser Version 2.28
+			XML::Parser Version 2.29
 
 Copyright (c) 1998-2000 Larry Wall and Clark Cooper.
 All rights reserved.
@@ -59,61 +59,30 @@ list, to which you can subscribe by sending mail to:
 
     subscribe-perl-xml@lyris.activestate.com
 
-Differences from Version 2.27
+Differences from Version 2.28
 =============================
 
-- Junked local (Expat.xs) declaration parsing and patched expat to handle
-  XML declarations, element declarations, attlist declarations, and all
-  entity declarations. This fixed a segfault that occurred for certain
-  syntax errors in declarations. It also fixed a bug in which the doctype
-  handler did not get called when parsing an external DTD.
+The default LWP external entity handler is now dynamicly loaded on the
+first call to the default external entity handler. Also there is a
+NoLWP option to XML::Parser that forces use of the file based external
+entity handler (unless the application supplies an external entity handler.)
 
-  Unfortunately, a side effect is that the recognized_string, original_string,
-  and default_current methods no longer work inside declaration handlers.
+The LWP external entity handler now recognizes proxy evironment variables
+as described the LWP documentation on the env_proxy method.
 
-- The element declaration handler no longer receives a string for the
-  content model, but instead receives an XML::Parser::ContentModel object
-  that represents the parsed model. This class of objects is covered in
-  the "XML::Parser::ContentModel Methods" section of the XML::Parser::Expat
-  documentation. When used as a string, though, an object of this class
-  will return a string representation of the content model.
+It's now possible to use the ExpatNB object directly, since the protective
+_State_ attribute is set in the parse_more method.
 
-- The doctype declaration handler is now called prior to processing internal
-  or external DTD declarations and instead of a string for the internal
-  subset parameter, it receives a true or undef value to indicate whether or
-  not an internal subset is present.
+Fixed the ERRSV bug that was causing problems for users of perl 5.004.
 
-- A new handler, DoctypeFin, was added. Handlers of this type are called after
-  processing all of the DOCTYPE declaration, including any internal or external
-  subsets.
+Fixed bug in XML::Parser::new that overrode application supplied external
+entity handlers.
 
-- A new handler, ExternEntFin, was added. These are called after parsing
-  external entities.
+Fixed bugs in expat that caused notation declarations and attlist declarations
+with notation types to be ignored.
 
-- The parsefile method of XML::Parser and the default external entity
-  reference handlers, file_ext_ent_handler & lwp_ext_ent_handler now all
-  set the base path.
-
-- The file_ext_ent_handler default external entity reference handler now
-  opens a file handle instead of reading the entire external entity at once.
-
-- When using perl version 5.6.0 or greater, strings generated in XML::Parser
-  that contain UTF-8 are marked as such. (i.e. perl string operators will
-  act on the characters instead of the bytes.)
-
-- Fixed a bug in xml_escape where it got confused over perl regex
-  meta-characters.
-
-- Fixed a bug in the Proc handler of the Debug style.
-
-- Fixed a bug in the element index mechanism. It was misreporting the index
-  in end tag handlers.
-
-- Fixed some bugs in exception handling. In particular, fixed memory leaks
-  associated with exceptions.
-
-- Updated the canonical utility in the samples directory to conform to newer
-  version of the Canonical XML working draft.
+Changed the canonical script to take a filename argument (in order to get
+base path information.)
 
 Clark Cooper
   coopercc@netheaven.com
