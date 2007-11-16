@@ -22,7 +22,7 @@ my $lastel;
 sub text {
   my ($xp, $data) = @_;
 
-  push(@bytes, unpack('C*', $data));
+  push(@bytes, unpack('U0C*', $data)); # was fixed 5.10
 }
 
 sub start {
@@ -91,7 +91,7 @@ sub get_attr {
   %attr = @list;
 }
 
-my $p = new XML::Parser(Handlers => {Start => \&get_attr});
+$p = new XML::Parser(Handlers => {Start => \&get_attr});
 
 eval{ $p->parse($docstring) };
 
