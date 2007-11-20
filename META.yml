@@ -1,7 +1,7 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         XML-Parser
-version:      2.35
+version:      2.36
 version_from: Parser.pm
 installdirs:  site
 requires:
