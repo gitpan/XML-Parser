@@ -8,7 +8,7 @@
 #
 # $Revision: 1.1.1.1 $
 #
-# $Date: 2003/07/27 11:07:11 $
+# $Date: 2003-07-27 11:07:11 $
 #
 #	This program take an XML document (either on standard input or
 #	from a filename supplied as an argument) and generates corresponding
@@ -120,5 +120,5 @@ sub proc {
 
 # Tell emacs that this is really a perl script
 #Local Variables:
-#Mode: perl
+#mode: perl
 #End:
