@@ -1,5 +1,8 @@
 Revision history for Perl extension XML::Parser.
 
+2.41 2011-06-01 (by Todd Rinaldo
+    - Tests are cleaned. promoting to stable. No changes since 2.40_02
+
 2.40_02 2011-05-31 (by Todd Rinaldo)
     - TODO some tests which fail in Free BSD due to improper expat CVE patch
       http://www.freebsd.org/cgi/query-pr.cgi?pr=157469

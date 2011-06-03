@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               XML-Parser
-version:            2.40_02
+version:            2.41
 abstract:           A perl module for parsing XML documents
 author:
     - Clark Cooper (coopercc@netheaven.com)
