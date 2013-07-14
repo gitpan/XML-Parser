@@ -1,4 +1,3 @@
-
 use 5.004005; #Devel::CheckLib
 use ExtUtils::MakeMaker;
 use lib qw(inc);
@@ -39,7 +38,7 @@ unless (
     warn <<'Expat_Not_Installed;';
 
 Expat must be installed prior to building XML::Parser and I can't find
-it in the standard library directories. Install 'expat-devel' package with your
+it in the standard library directories. Install expat development package with your
 OS package manager. See 'README'.
 
 Or you can download expat from:
@@ -153,7 +152,7 @@ WriteMakefile1(
   MIN_PERL_VERSION => '5.00405',
   META_MERGE => {
     resources => {
-      repository => 'http://github.com/chorny/XML-Parser',
+      repository => 'http://github.com/toddr/XML-Parser',
     },
   },
   #BUILD_REQUIRES => {

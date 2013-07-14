@@ -1,25 +1,25 @@
---- #YAML:1.0
-name:               XML-Parser
-version:            2.41
-abstract:           A perl module for parsing XML documents
+---
+abstract: 'A perl module for parsing XML documents'
 author:
-    - Clark Cooper (coopercc@netheaven.com)
-license:            perl
-distribution_type:  module
-configure_requires:
-    ExtUtils::MakeMaker:  0
+  - 'Clark Cooper (coopercc@netheaven.com)'
 build_requires:
-    ExtUtils::MakeMaker:  0
-requires:
-    LWP:   0
-    perl:  5.00405
-resources:
-    repository:  http://github.com/chorny/XML-Parser
-no_index:
-    directory:
-        - t
-        - inc
-generated_by:       ExtUtils::MakeMaker version 6.56
+  ExtUtils::MakeMaker: 0
+configure_requires:
+  ExtUtils::MakeMaker: 0
+dynamic_config: 1
+generated_by: 'ExtUtils::MakeMaker version 6.68, CPAN::Meta::Converter version 2.120921'
+license: perl
 meta-spec:
-    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
-    version:  1.4
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: XML-Parser
+no_index:
+  directory:
+    - t
+    - inc
+requires:
+  LWP: 0
+  perl: 5.00405
+resources:
+  repository: http://github.com/toddr/XML-Parser
+version: 2.42_01
