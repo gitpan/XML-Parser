@@ -1,7 +1,16 @@
 Revision history for Perl extension XML::Parser.
 
-2.41_01 2013-07-12 (by Todd Rinaldo)
-    - Added instructi to README for OSX
+    - Better compatibility with FileHandle on perl 5.10
+
+2.43 2014-12-11 (by Todd Rinaldo)
+    - POD patch to man from Debian via Nicholas Bamber
+    - POD patch from Debian via gregor herrmann.
+    - Add more useful error message on parse to Expat
+    - Fix LWP dependency to be LWP::Useragent
+    - Bump to 2.43 for overdue release to CPAN.
+
+2.42_01 2013-07-12 (by Todd Rinaldo)
+    - Added instructions to README for OSX
     - XS changes: stop using SvPV(string, PL_na)
     - Fix documentation typos
 

@@ -38,8 +38,8 @@ unless (
     warn <<'Expat_Not_Installed;';
 
 Expat must be installed prior to building XML::Parser and I can't find
-it in the standard library directories. Install expat development package with your
-OS package manager. See 'README'.
+it in the standard library directories. Install 'expat-devel' (or
+'libexpat1-dev') package with your OS package manager. See 'README'.
 
 Or you can download expat from:
 
@@ -98,8 +98,8 @@ unless ($expat_libpath) {
     warn <<'Expat_Not_Installed;';
 
 Expat must be installed prior to building XML::Parser and I can't find
-it in the standard library directories. Install 'expat-devel' package with your
-OS package manager.
+it in the standard library directories. Install 'expat-devel' (or
+'libexpat1-dev') package with your OS package manager.
 
 Or you can download expat from:
 
@@ -155,15 +155,16 @@ WriteMakefile1(
       repository => 'http://github.com/toddr/XML-Parser',
     },
   },
-  #BUILD_REQUIRES => {
-  #},
+  BUILD_REQUIRES => {
+    'Test::More' => 0,
+  },
 
   NAME	=> 'XML::Parser',
   DIR	=> [qw(Expat)],
   dist      => {COMPRESS => 'gzip', SUFFIX => '.gz'},
   VERSION_FROM => 'Parser.pm',
   PREREQ_PM    => {
-    LWP => 0, #for tests
+    'LWP::UserAgent' => 0, #for tests
   },
     $^O =~/win/i ? (
         dist => {

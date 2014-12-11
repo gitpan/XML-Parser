@@ -16,7 +16,7 @@ use Carp;
 
 BEGIN {
   require XML::Parser::Expat;
-  $VERSION = '2.42_01';
+  $VERSION = '2.43';
   die "Parser.pm and Expat.pm versions don't match"
     unless $VERSION eq $XML::Parser::Expat::VERSION;
 }
@@ -360,7 +360,7 @@ XML::Parser - A perl module for parsing XML documents
   $p3->parsefile('junk.xml', ErrorContext => 3);
 
 =begin man
-.ds PI PI
+.ds PI
 
 =end man
 

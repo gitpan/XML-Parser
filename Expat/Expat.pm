@@ -10,7 +10,7 @@ use Carp;
 require DynaLoader;
 
 @ISA = qw(DynaLoader);
-$VERSION = "2.42_01";
+$VERSION = "2.43";
 
 $have_File_Spec = $INC{'File/Spec.pm'} || do 'File/Spec.pm';
 
@@ -455,6 +455,10 @@ sub parse {
         no strict 'refs';
         $ioref = *{$arg}{IO} if defined *{$arg};
       };
+      if (ref($ioref) eq 'FileHandle') {
+        #for perl 5.10.x and possibly earlier, see t/file_open_scalar.t
+        require FileHandle;
+      }
     }
   }
   
@@ -466,9 +470,12 @@ sub parse {
     
     $prev_rs = $ioclass->input_record_separator("\n$delim\n")
       if defined($delim);
-    
-    $result = ParseStream($parser, $ioref, $delim);
-    
+
+    eval { $result = ParseStream($parser, $ioref, $delim) };
+    if($@) {
+      $self->xpcroak("$@");
+    }
+
     $ioclass->input_record_separator($prev_rs)
       if defined($delim);
   } else {

@@ -52,6 +52,7 @@ t/defaulted.t                   Test script
 t/encoding.t                    Test script
 t/external_ent.t                Test script
 t/file.t                        Test script
+t/file_open_scalar.t            Test script
 t/finish.t                      Test script
 t/ext.ent                       External entity for parament.t test
 t/ext2.ent                      External entity for parament.t test
